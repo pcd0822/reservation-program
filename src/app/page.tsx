@@ -34,9 +34,21 @@ export default function HomePage() {
     }
   };
 
+  const isGoogleSheetUrl = (text: string) =>
+    /docs\.google\.com\/spreadsheets\//i.test(text) || /spreadsheets\.google\.com/i.test(text);
+
   const goAdmin = () => {
-    if (!linkId.trim()) return;
-    const id = linkId.trim().replace(/.*\/(a|s)\//, "").replace(/\/$/, "") || linkId.trim();
+    const trimmed = linkId.trim();
+    if (!trimmed) return;
+    if (isGoogleSheetUrl(trimmed)) {
+      alert("구글 스프레드시트 링크는 여기가 아니에요.\n\n먼저 아래에서 '새 예약 공간 만들기'로 관리자 링크를 만든 뒤, 그 링크로 들어가서 '시트 연결' 탭에 구글 시트 링크를 넣어 주세요.");
+      return;
+    }
+    const id = trimmed.replace(/.*\/(a|s)\//, "").replace(/\/$/, "").trim() || trimmed;
+    if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
+      alert("관리자 페이지 링크 또는 ID만 입력해 주세요.\n예: https://사이트주소/a/abc123 또는 abc123");
+      return;
+    }
     window.location.href = `/a/${id}`;
   };
 
@@ -56,10 +68,13 @@ export default function HomePage() {
               <label className="block text-left text-sm font-medium text-gray-700">
                 이미 관리자 링크가 있어요
               </label>
+              <p className="text-xs text-gray-500 text-left">
+                관리자 페이지 주소를 넣어 주세요. 구글 시트 링크는 관리자 페이지 안 &quot;시트 연결&quot; 탭에서 넣습니다.
+              </p>
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="링크 또는 ID 입력"
+                  placeholder="예: https://사이트주소/a/abc123"
                   value={linkId}
                   onChange={(e) => setLinkId(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && goAdmin()}
