@@ -134,6 +134,7 @@ export default function StudentPage() {
   return (
     <main className="min-h-screen bg-gradient-to-br from-pastel-cream via-pastel-sky/20 to-pastel-mint/20">
       <div className="max-w-2xl mx-auto p-4 pb-12">
+        <p className="text-center text-xs text-gray-400 py-2">Designed by Deulssam</p>
         <header className="text-center py-6">
           <h1 className="text-2xl font-bold text-gray-800 rounded-3xl">예약 신청</h1>
           <p className="text-gray-600 text-sm mt-1">아래 항목을 모두 입력한 뒤 원하는 일정을 눌러 신청하세요.</p>

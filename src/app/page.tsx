@@ -1,13 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CalendarDays, PlusCircle, Link2, Sparkles } from "lucide-react";
+
+const STORAGE_KEY_ADMIN_ID = "reservation_admin_id";
 
 export default function HomePage() {
   const [linkId, setLinkId] = useState("");
   const [creating, setCreating] = useState(false);
   const [showExistingLink, setShowExistingLink] = useState(false);
   const [error, setError] = useState("");
+  const [savedAdminId, setSavedAdminId] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const id = localStorage.getItem(STORAGE_KEY_ADMIN_ID);
+      if (id && /^[a-zA-Z0-9_-]+$/.test(id)) setSavedAdminId(id);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const handleCreate = async () => {
     setError("");
@@ -18,13 +30,20 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "create" }),
       });
-      let data: { adminUrl?: string; error?: string } = {};
+      let data: { adminUrl?: string; id?: string; error?: string } = {};
       try {
         data = await res.json();
       } catch {
         data = {};
       }
       if (res.ok && data.adminUrl) {
+        if (data.id) {
+          try {
+            localStorage.setItem(STORAGE_KEY_ADMIN_ID, data.id);
+          } catch {
+            /* ignore */
+          }
+        }
         const url = data.adminUrl.startsWith("http") ? data.adminUrl : `${window.location.origin}${data.adminUrl}`;
         window.location.href = url;
         return;
@@ -40,23 +59,32 @@ export default function HomePage() {
   const isGoogleSheetUrl = (text: string) =>
     /docs\.google\.com\/spreadsheets\//i.test(text) || /spreadsheets\.google\.com/i.test(text);
 
-  const goAdmin = () => {
-    const trimmed = linkId.trim();
-    if (!trimmed) return;
-    if (isGoogleSheetUrl(trimmed)) {
-      alert("구글 스프레드시트 링크는 여기가 아니에요.\n\n먼저 아래 '새 일정 만들기'를 누른 뒤, 관리자 페이지의 '시트 연결' 탭에 구글 시트 링크를 넣어 주세요.");
-      return;
-    }
-    const id = trimmed.replace(/.*\/(a|s)\//, "").replace(/\/$/, "").trim() || trimmed;
+  const goAdmin = (toId?: string) => {
+    const id = toId ?? (() => {
+      const trimmed = linkId.trim();
+      if (!trimmed) return null;
+      if (isGoogleSheetUrl(trimmed)) {
+        alert("구글 스프레드시트 링크는 여기가 아니에요.\n\n먼저 아래 '새 일정 만들기'를 누른 뒤, 관리자 페이지의 '시트 연결' 탭에 구글 시트 링크를 넣어 주세요.");
+        return null;
+      }
+      return trimmed.replace(/.*\/(a|s)\//, "").replace(/\/$/, "").trim() || trimmed;
+    })();
+    if (!id) return;
     if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
       alert("관리자 페이지 링크 또는 ID만 입력해 주세요.\n예: https://사이트주소/a/abc123 또는 abc123");
       return;
+    }
+    try {
+      localStorage.setItem(STORAGE_KEY_ADMIN_ID, id);
+    } catch {
+      /* ignore */
     }
     window.location.href = `/a/${id}`;
   };
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 bg-gradient-to-br from-pastel-cream via-pastel-lavender/30 to-pastel-mint/30">
+      <p className="absolute top-3 left-0 right-0 text-center text-xs text-gray-400">Designed by Deulssam</p>
       <div className="w-full max-w-md card-soft p-8 md:p-10 text-center space-y-6">
         <div className="flex justify-center gap-2 text-pastel-pink">
           <CalendarDays className="w-10 h-10" strokeWidth={1.5} />
@@ -78,6 +106,17 @@ export default function HomePage() {
               </a>
             </p>
           </div>
+        )}
+
+        {savedAdminId && (
+          <button
+            type="button"
+            onClick={() => goAdmin(savedAdminId)}
+            className="btn-bounce w-full rounded-2xl bg-pastel-mint px-4 py-3 font-bold text-gray-800 shadow-md hover:shadow-lg flex items-center justify-center gap-2 border-2 border-pastel-lavender"
+          >
+            <Link2 className="w-5 h-5 shrink-0" strokeWidth={2} />
+            저장된 관리자 페이지로
+          </button>
         )}
 
         <button

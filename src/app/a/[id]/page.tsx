@@ -40,6 +40,12 @@ export default function AdminPage() {
           return;
         }
         setTenant(data);
+        if (data.sheetId) setTab("schedules");
+        try {
+          localStorage.setItem("reservation_admin_id", id);
+        } catch {
+          /* ignore */
+        }
       })
       .catch(() => {
         setApiError("연결할 수 없어요. 네트워크를 확인해 주세요.");
@@ -83,6 +89,7 @@ export default function AdminPage() {
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-pastel-cream via-pastel-lavender/20 to-pastel-mint/20">
+      <p className="text-center text-xs text-gray-400 py-2">Designed by Deulssam</p>
       <header className="sticky top-0 z-10 border-b border-white/50 bg-white/80 backdrop-blur rounded-b-3xl shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2">
           <Link
