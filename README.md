@@ -88,7 +88,7 @@ npm run dev
 
 사용자가 연결한 시트에는 다음이 저장됩니다.
 
-- **첫 시트(Sheet1)**: 신청 내역 (일정ID, 일정명, 날짜, 시간, 신청일시 + 사용자 입력 항목)
+- **첫 시트**(이름 무관, 예: Sheet1·시트1): 신청 내역 (일정ID, 일정명, 날짜, 시간, 신청일시 + 사용자 입력 항목)
 - **일정 시트**: 일정 목록 (Id, Title, Type, DateStart, DateEnd, TimeLabel, MaxCapacity, ApplyUntil, CustomFields)
 
 일정 시트는 앱이 자동으로 추가합니다.

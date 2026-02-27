@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
           id: scheduleId,
           title: a.일정명 ?? "",
           dateStart: a.날짜 ?? "",
-          timeLabel: schedule?.timeLabel ?? null,
+          timeLabel: a.시간 ?? null,
         },
       };
     });
@@ -56,9 +56,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { tenantId, scheduleItemId, data } = body as {
+    const { tenantId, scheduleItemId, selectedSlot, data } = body as {
       tenantId: string;
       scheduleItemId: string;
+      selectedSlot?: { date: string; timeLabel?: string };
       data: Record<string, string | number>;
     };
 
@@ -80,10 +81,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "일정을 찾을 수 없습니다." }, { status: 404 });
     }
 
+    const slots = schedule.slots && schedule.slots.length > 0 ? schedule.slots : [{ date: schedule.dateStart.slice(0, 10), timeLabel: schedule.timeLabel ?? "" }];
+    const slotDate = selectedSlot?.date ? String(selectedSlot.date).slice(0, 10) : slots[0].date;
+    const slotTimeLabel = selectedSlot?.timeLabel !== undefined ? String(selectedSlot.timeLabel ?? "") : slots[0].timeLabel;
+    if (slots.length > 1) {
+      const found = slots.some((s) => s.date.slice(0, 10) === slotDate && (s.timeLabel ?? "") === slotTimeLabel);
+      if (!found) {
+        return NextResponse.json({ error: "선택한 일시가 이 일정에 없습니다." }, { status: 400 });
+      }
+    }
+
     const applications = await sheetReadApplications(tenant.sheetId);
-    const count = applications.filter((a) => (a.일정ID ?? "") === scheduleItemId).length;
-    if (count >= schedule.maxCapacity) {
-      return NextResponse.json({ error: "해당 일정은 마감되었습니다." }, { status: 400 });
+    const slotCount = applications.filter(
+      (a) => (a.일정ID ?? "") === scheduleItemId && (a.날짜 ?? "").slice(0, 10) === slotDate && (a.시간 ?? "") === slotTimeLabel
+    ).length;
+    if (slotCount >= schedule.maxCapacity) {
+      return NextResponse.json({ error: "선택한 일시는 마감되었습니다." }, { status: 400 });
     }
     const now = new Date();
     if (schedule.applyUntil && now > new Date(schedule.applyUntil)) {
@@ -110,8 +123,8 @@ export async function POST(request: NextRequest) {
     const row = [
       scheduleItemId,
       schedule.title,
-      schedule.dateStart.slice(0, 10),
-      schedule.timeLabel ?? "",
+      slotDate,
+      slotTimeLabel,
       new Date().toISOString(),
       ...fields.map((f) => toSingleValue(data[f.id])),
     ];

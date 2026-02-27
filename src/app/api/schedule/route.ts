@@ -5,6 +5,7 @@ import {
   sheetAppendSchedule,
   sheetDeleteSchedule,
   sheetReadApplications,
+  type ScheduleSlot,
 } from "@/lib/sheets";
 import { generateToken } from "@/lib/utils";
 
@@ -20,16 +21,25 @@ export async function GET(request: NextRequest) {
     }
     const schedules = await sheetReadSchedules(tenant.sheetId);
     const applications = await sheetReadApplications(tenant.sheetId);
-    const countByScheduleId = new Map<string, number>();
+    const slotKey = (date: string, time: string) => `${(date || "").slice(0, 10)}_${time ?? ""}`;
+    const countBySlot = new Map<string, number>();
     applications.forEach((a) => {
-      const id = a.일정ID || "";
-      countByScheduleId.set(id, (countByScheduleId.get(id) ?? 0) + 1);
+      const key = slotKey(a.날짜 ?? "", a.시간 ?? "");
+      countBySlot.set(key, (countBySlot.get(key) ?? 0) + 1);
     });
     const list = schedules
-      .map((s) => ({
-        ...s,
-        _count: { applications: countByScheduleId.get(s.id) ?? 0 },
-      }))
+      .map((s) => {
+        const slotCounts: Record<string, number> = {};
+        (s.slots ?? []).forEach((slot) => {
+          const key = slotKey(slot.date, slot.timeLabel);
+          slotCounts[key] = countBySlot.get(key) ?? 0;
+        });
+        return {
+          ...s,
+          _count: { applications: (s.slots ?? []).length > 0 ? undefined : applications.filter((a) => a.일정ID === s.id).length },
+          slotCounts: (s.slots ?? []).length > 0 ? slotCounts : undefined,
+        };
+      })
       .sort((a, b) => new Date(a.dateStart).getTime() - new Date(b.dateStart).getTime());
     return NextResponse.json(list);
   } catch (e) {
@@ -51,6 +61,7 @@ export async function POST(request: NextRequest) {
       maxCapacity,
       applyUntil,
       customFields,
+      slots: slotsInput,
     } = body as {
       tenantId: string;
       title: string;
@@ -61,6 +72,7 @@ export async function POST(request: NextRequest) {
       maxCapacity: number;
       applyUntil?: string | null;
       customFields: string;
+      slots?: { date: string; timeLabel?: string }[];
     };
 
     if (!tenantId || !title || !type || !dateStart || !dateEnd) {
@@ -78,6 +90,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const slots: ScheduleSlot[] =
+      Array.isArray(slotsInput) && slotsInput.length > 0
+        ? slotsInput.map((s) => ({
+            date: String(s.date ?? "").slice(0, 10),
+            timeLabel: String(s.timeLabel ?? ""),
+          })).filter((s) => s.date)
+        : [];
+
     const id = generateToken();
     await sheetAppendSchedule(tenant.sheetId, {
       id,
@@ -89,6 +109,7 @@ export async function POST(request: NextRequest) {
       maxCapacity: Math.max(1, Number(maxCapacity) || 1),
       applyUntil: applyUntil ?? null,
       customFields: typeof customFields === "string" ? customFields : JSON.stringify(customFields ?? []),
+      slots: slots.length > 0 ? slots : undefined,
     });
 
     return NextResponse.json({
@@ -102,6 +123,7 @@ export async function POST(request: NextRequest) {
       maxCapacity: Math.max(1, Number(maxCapacity) || 1),
       applyUntil: applyUntil ?? null,
       customFields: typeof customFields === "string" ? customFields : JSON.stringify(customFields ?? []),
+      slots: slots.length > 0 ? slots : undefined,
     });
   } catch (e) {
     console.error(e);

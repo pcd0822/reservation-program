@@ -1,7 +1,6 @@
 import { google } from "googleapis";
 
 const SCHEDULE_SHEET_NAME = "일정";
-const APPLICATION_SHEET_NAME = "Sheet1"; // 신청 = 첫 시트
 
 const SCHEDULE_HEADERS = [
   "Id",
@@ -13,6 +12,7 @@ const SCHEDULE_HEADERS = [
   "MaxCapacity",
   "ApplyUntil",
   "CustomFields",
+  "Slots",
 ];
 
 /** JSON의 private_key에서 이스케이프된 줄바꿈(\\n)을 실제 줄바꿈으로 복구 */
@@ -48,6 +48,18 @@ async function getRegistryFirstSheetName(): Promise<string> {
   const registryId = getRegistrySheetId();
   const res = await sheets.spreadsheets.get({
     spreadsheetId: registryId,
+    fields: "sheets(properties(title))",
+  });
+  const title = res.data.sheets?.[0]?.properties?.title ?? "Sheet1";
+  return title.replace(/'/g, "''");
+}
+
+/** 특정 스프레드시트의 첫 시트 이름(예: Sheet1, 시트1). 범위용으로 따옴표 이스케이프 */
+async function getFirstSheetName(spreadsheetId: string): Promise<string> {
+  const auth = getAuth();
+  const sheets = google.sheets({ version: "v4", auth });
+  const res = await sheets.spreadsheets.get({
+    spreadsheetId,
     fields: "sheets(properties(title))",
   });
   const title = res.data.sheets?.[0]?.properties?.title ?? "Sheet1";
@@ -155,7 +167,7 @@ async function ensureScheduleTab(sheetId: string): Promise<void> {
   }
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: `'${SCHEDULE_SHEET_NAME}'!A1:I1`,
+    range: `'${SCHEDULE_SHEET_NAME}'!A1:J1`,
   });
   const existing = (res.data.values?.[0] ?? []) as string[];
   if (existing.length === 0 || existing[0] === "") {
@@ -165,6 +177,29 @@ async function ensureScheduleTab(sheetId: string): Promise<void> {
       valueInputOption: "USER_ENTERED",
       requestBody: { values: [SCHEDULE_HEADERS] },
     });
+  }
+}
+
+export type ScheduleSlot = { date: string; timeLabel: string };
+
+function parseSlots(slotsJson: string | undefined, dateStart: string, timeLabel: string | null): ScheduleSlot[] {
+  if (!slotsJson?.trim()) {
+    const d = dateStart.slice(0, 10);
+    return [{ date: d, timeLabel: timeLabel ?? "" }];
+  }
+  try {
+    const arr = JSON.parse(slotsJson) as unknown;
+    if (!Array.isArray(arr) || arr.length === 0) {
+      const d = dateStart.slice(0, 10);
+      return [{ date: d, timeLabel: timeLabel ?? "" }];
+    }
+    return arr.map((x) => ({
+      date: String((x as { date?: string }).date ?? "").slice(0, 10),
+      timeLabel: String((x as { timeLabel?: string }).timeLabel ?? ""),
+    })).filter((s) => s.date);
+  } catch {
+    const d = dateStart.slice(0, 10);
+    return [{ date: d, timeLabel: timeLabel ?? "" }];
   }
 }
 
@@ -179,6 +214,7 @@ export async function sheetReadSchedules(sheetId: string): Promise<
     maxCapacity: number;
     applyUntil: string | null;
     customFields: string;
+    slots: ScheduleSlot[];
   }[]
 > {
   const auth = getAuth();
@@ -187,7 +223,7 @@ export async function sheetReadSchedules(sheetId: string): Promise<
   try {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: `'${SCHEDULE_SHEET_NAME}'!A2:I`,
+      range: `'${SCHEDULE_SHEET_NAME}'!A2:J`,
     });
     rows = (res.data.values ?? []) as string[][];
   } catch {
@@ -195,17 +231,23 @@ export async function sheetReadSchedules(sheetId: string): Promise<
   }
   return rows
     .filter((r) => r[0]?.trim())
-    .map((r) => ({
-      id: r[0] ?? "",
-      title: r[1] ?? "",
-      type: r[2] ?? "day",
-      dateStart: r[3] ?? "",
-      dateEnd: r[4] ?? "",
-      timeLabel: r[5]?.trim() || null,
-      maxCapacity: Math.max(1, parseInt(r[6], 10) || 1),
-      applyUntil: r[7]?.trim() || null,
-      customFields: r[8] ?? "[]",
-    }));
+    .map((r) => {
+      const dateStart = r[3] ?? "";
+      const timeLabel = r[5]?.trim() || null;
+      const slots = parseSlots(r[9], dateStart, timeLabel);
+      return {
+        id: r[0] ?? "",
+        title: r[1] ?? "",
+        type: r[2] ?? "day",
+        dateStart,
+        dateEnd: r[4] ?? "",
+        timeLabel,
+        maxCapacity: Math.max(1, parseInt(r[6], 10) || 1),
+        applyUntil: r[7]?.trim() || null,
+        customFields: r[8] ?? "[]",
+        slots,
+      };
+    });
 }
 
 export async function sheetAppendSchedule(
@@ -220,14 +262,19 @@ export async function sheetAppendSchedule(
     maxCapacity: number;
     applyUntil: string | null;
     customFields: string;
+    slots?: ScheduleSlot[];
   }
 ): Promise<void> {
   await ensureScheduleTab(sheetId);
   const auth = getAuth();
   const sheets = google.sheets({ version: "v4", auth });
+  const slotsJson =
+    row.slots && row.slots.length > 0
+      ? JSON.stringify(row.slots.map((s) => ({ date: s.date.slice(0, 10), timeLabel: s.timeLabel ?? "" })))
+      : "";
   await sheets.spreadsheets.values.append({
     spreadsheetId: sheetId,
-    range: `'${SCHEDULE_SHEET_NAME}'!A:I`,
+    range: `'${SCHEDULE_SHEET_NAME}'!A:J`,
     valueInputOption: "USER_ENTERED",
     insertDataOption: "INSERT_ROWS",
     requestBody: {
@@ -242,6 +289,7 @@ export async function sheetAppendSchedule(
           String(row.maxCapacity),
           row.applyUntil ?? "",
           row.customFields,
+          slotsJson,
         ],
       ],
     },
@@ -288,11 +336,12 @@ export async function sheetReadApplications(
 ): Promise<{ 일정ID: string; 일정명: string; 날짜: string; 시간: string; 신청일시: string; [key: string]: string }[]> {
   const auth = getAuth();
   const sheets = google.sheets({ version: "v4", auth });
+  const appSheetName = await getFirstSheetName(sheetId);
   let rows: string[][];
   try {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: `${APPLICATION_SHEET_NAME}!A:Z`,
+      range: `'${appSheetName}'!A:Z`,
     });
     rows = (res.data.values ?? []) as string[][];
   } catch {
@@ -320,22 +369,23 @@ export async function sheetAppendApplication(
 ): Promise<void> {
   const auth = getAuth();
   const sheets = google.sheets({ version: "v4", auth });
+  const appSheetName = await getFirstSheetName(sheetId);
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: `${APPLICATION_SHEET_NAME}!A1:Z1`,
+    range: `'${appSheetName}'!A1:Z1`,
   });
   const existing = (res.data.values?.[0] ?? []) as string[];
   if (existing.length === 0 || existing[0] === "") {
     await sheets.spreadsheets.values.update({
       spreadsheetId: sheetId,
-      range: `${APPLICATION_SHEET_NAME}!A1`,
+      range: `'${appSheetName}'!A1`,
       valueInputOption: "USER_ENTERED",
       requestBody: { values: [headers] },
     });
   }
   await sheets.spreadsheets.values.append({
     spreadsheetId: sheetId,
-    range: `${APPLICATION_SHEET_NAME}!A:Z`,
+    range: `'${appSheetName}'!A:Z`,
     valueInputOption: "USER_ENTERED",
     insertDataOption: "INSERT_ROWS",
     requestBody: { values: [row] },

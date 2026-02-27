@@ -7,6 +7,8 @@ import { startOfWeek, endOfWeek, parseISO } from "date-fns";
 
 type ScheduleType = "week" | "day" | "time";
 
+type SlotRow = { date: string; timeLabel: string };
+
 type Props = { tenantId: string };
 
 export function TabSchedules({ tenantId }: Props) {
@@ -16,6 +18,7 @@ export function TabSchedules({ tenantId }: Props) {
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
   const [timeLabel, setTimeLabel] = useState("");
+  const [slots, setSlots] = useState<SlotRow[]>([{ date: "", timeLabel: "" }]);
   const [maxCapacity, setMaxCapacity] = useState(5);
   const [applyUntil, setApplyUntil] = useState("");
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
@@ -38,7 +41,21 @@ export function TabSchedules({ tenantId }: Props) {
   };
 
   const titlesToCreate = sameSlotTitles.map((t) => t.trim()).filter(Boolean);
-  const canCreate = type && (type === "week" ? dateStart && dateEnd : dateStart) && maxCapacity >= 1;
+  const slotsToSend = (type === "day" || type === "time") ? slots.filter((s) => s.date.trim()) : [];
+  const canCreate =
+    type &&
+    maxCapacity >= 1 &&
+    (type === "week" ? dateStart && dateEnd : type === "day" || type === "time" ? slotsToSend.length >= 1 : dateStart);
+
+  const addSlot = () => setSlots((p) => [...p, { date: dateStart || "", timeLabel: type === "time" ? timeLabel : "" }]);
+  const updateSlot = (i: number, field: "date" | "timeLabel", value: string) => {
+    setSlots((p) => {
+      const n = [...p];
+      n[i] = { ...n[i], [field]: value };
+      return n;
+    });
+  };
+  const removeSlot = (i: number) => setSlots((p) => (p.length > 1 ? p.filter((_, idx) => idx !== i) : p));
 
   const handleCreate = async () => {
     if (!canCreate) return;
@@ -61,6 +78,11 @@ export function TabSchedules({ tenantId }: Props) {
       }
       if (type === "day") dateE = dateS;
 
+      const bodySlots =
+        slotsToSend.length > 0
+          ? slotsToSend.map((s) => ({ date: s.date.slice(0, 10), timeLabel: (type === "time" ? s.timeLabel : "") || "" }))
+          : undefined;
+
       for (const t of toCreate) {
         await fetch("/api/schedule", {
           method: "POST",
@@ -75,6 +97,7 @@ export function TabSchedules({ tenantId }: Props) {
             maxCapacity,
             applyUntil: applyUntil ? new Date(applyUntil).toISOString() : null,
             customFields: JSON.stringify(customFields),
+            slots: bodySlots,
           }),
         });
       }
@@ -191,11 +214,16 @@ export function TabSchedules({ tenantId }: Props) {
 
       {(type === "day" || type === "time") && (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">날짜</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">날짜 (첫 번째 일시에 반영)</label>
           <input
             type="date"
             value={dateStart}
-            onChange={(e) => { setDateStart(e.target.value); if (!dateEnd) setDateEnd(e.target.value); }}
+            onChange={(e) => {
+              const v = e.target.value;
+              setDateStart(v);
+              if (!dateEnd) setDateEnd(v);
+              if (slots.length === 1) setSlots([{ ...slots[0], date: v }]);
+            }}
             className="w-full rounded-2xl border-2 border-pastel-lavender px-3 py-2"
           />
         </div>
@@ -203,14 +231,58 @@ export function TabSchedules({ tenantId }: Props) {
 
       {type === "time" && (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">시간대 (예: 1교시, 09:00)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">시간대 (예: 1교시, 09:00) — 첫 번째 일시에 반영</label>
           <input
             type="text"
             value={timeLabel}
-            onChange={(e) => setTimeLabel(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setTimeLabel(v);
+              if (slots.length === 1) setSlots([{ ...slots[0], timeLabel: v }]);
+            }}
             placeholder="1교시"
             className="w-full rounded-2xl border-2 border-pastel-lavender px-3 py-2"
           />
+        </div>
+      )}
+
+      {(type === "day" || type === "time") && (
+        <div>
+          <p className="text-sm font-medium text-gray-700 mb-1">신청 가능 일시 (여러 개 추가 가능)</p>
+          <p className="text-xs text-gray-500 mb-2">학생이 선택할 수 있는 날짜·시간을 나열하세요. 각 줄마다 하나의 선택지가 됩니다.</p>
+          {slots.map((slot, i) => (
+            <div key={i} className="flex gap-2 mb-2 items-center">
+              <input
+                type="date"
+                value={slot.date}
+                onChange={(e) => updateSlot(i, "date", e.target.value)}
+                className="flex-1 min-w-0 rounded-2xl border-2 border-pastel-lavender px-3 py-2"
+              />
+              {type === "time" && (
+                <input
+                  type="text"
+                  value={slot.timeLabel}
+                  onChange={(e) => updateSlot(i, "timeLabel", e.target.value)}
+                  placeholder="시간"
+                  className="w-28 rounded-2xl border-2 border-pastel-lavender px-3 py-2"
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => removeSlot(i)}
+                className="btn-bounce rounded-xl bg-red-100 px-2 py-2 text-red-700 text-sm shrink-0"
+              >
+                삭제
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addSlot}
+            className="btn-bounce rounded-xl bg-pastel-sky/80 px-3 py-1.5 text-sm font-medium"
+          >
+            + 일시 추가
+          </button>
         </div>
       )}
 
