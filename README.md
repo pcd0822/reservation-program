@@ -42,7 +42,19 @@
 npm install
 ```
 
-### 2. 데이터베이스 (SQLite)
+### 2. 데이터베이스 (PostgreSQL, 필수)
+
+Netlify·로컬 모두 **SQLite는 사용하지 않습니다.** 서버리스에서는 **PostgreSQL** 연결이 필요합니다.
+
+1. **[Neon](https://neon.tech)** (무료) 권장: 회원가입 후 **New Project** → 프로젝트 생성
+2. 대시보드에서 **Connection string** 복사 (예: `postgresql://user:pass@ep-xxx.region.aws.neon.tech/neondb?sslmode=require`)
+3. `.env` 파일에 추가:
+
+```env
+DATABASE_URL="postgresql://USER:PASSWORD@HOST/DATABASE?sslmode=require"
+```
+
+4. 테이블 생성:
 
 ```bash
 npx prisma generate
@@ -107,27 +119,26 @@ git push -u origin main
    - **Build command:** `npm run build`
    - **Node version:** 18 (Netlify 대시보드에서 **Environment variables**에 `NODE_VERSION = 18` 설정 가능)
 
-### 3. 환경 변수 설정
+### 3. 환경 변수 설정 (필수)
 
 Netlify 대시보드 → **Site settings** → **Environment variables** → **Add a variable**:
 
 | 변수명 | 값 | 비고 |
 |--------|-----|------|
-| `GOOGLE_SERVICE_ACCOUNT_KEY` | 서비스 계정 JSON 전체 (한 줄) | 구글 시트 연동에 필수 |
+| `DATABASE_URL` | Neon 등 PostgreSQL 연결 문자열 | **없으면 "DB 연결 확인" 오류 발생** |
+| `GOOGLE_SERVICE_ACCOUNT_KEY` | 서비스 계정 JSON 전체 (한 줄) | 구글 시트 연동 시 필수 |
 
-시크릿이므로 **Encrypted**로 저장됩니다.
+- **DATABASE_URL**: [Neon](https://neon.tech)에서 프로젝트 생성 후 Connection string 복사해 넣기.
+- 둘 다 시크릿이므로 **Encrypted**로 저장합니다.
 
-### 4. 데이터베이스 (SQLite) 안내
+배포 **전**에 로컬에서 한 번 실행해 두세요 (Neon에 테이블 생성):
 
-- **로컬/개발**: `npx prisma db push`로 생성된 `prisma/dev.db` 사용
-- **Netlify**: 서버리스 환경에서는 빌드 시 생성된 SQLite 파일이 배포 후에도 유지되지 않을 수 있습니다.  
-  **실서비스**에서는 다음 중 하나를 권장합니다.
-  - Netlify **Blobs** 또는 **Persistent storage** 등 Netlify에서 제공하는 스토리지에 DB 파일을 두는 방식으로 전환
-  - 또는 **Neon**(PostgreSQL), **Turso**(SQLite 호환) 등 외부 DB를 사용하도록 Prisma를 프로덕션용으로 설정
+```bash
+# .env에 DATABASE_URL 넣은 뒤
+npx prisma db push
+```
 
-현재 구조는 로컬/테스트용 SQLite 기준이며, Netlify에 올린 뒤에도 동작은 하되, 재배포 시 데이터가 초기화될 수 있음을 위와 같이 안내합니다.
-
-### 5. 배포 후
+### 4. 배포 후
 
 - Netlify가 배포할 때마다 **자동 빌드** 후 배포됩니다.
 - **관리자/학생 링크**는 `https://사이트주소.netlify.app/`, `https://사이트주소.netlify.app/a/xxx`, `https://사이트주소.netlify.app/s/xxx` 형태로 사용하면 됩니다.
@@ -138,7 +149,7 @@ Netlify 대시보드 → **Site settings** → **Environment variables** → **A
 
 - Next.js 14 (App Router), React, TypeScript  
 - Tailwind CSS (파스텔·둥글고 귀여운 UI, 반응형)  
-- Prisma + SQLite  
+- Prisma + PostgreSQL (Neon 등, Netlify·로컬 공통)  
 - Google Sheets API (서비스 계정)  
 - QR 코드 생성 (qrcode)
 
