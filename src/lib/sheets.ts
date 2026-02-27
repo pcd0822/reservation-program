@@ -16,12 +16,21 @@ const SCHEDULE_HEADERS = [
   "CustomFields",
 ];
 
+/** Netlify 등 환경 변수에 넣을 때 private_key 줄바꿈이 깨지면 DECODER 오류가 난다. 복구 처리 */
+function normalizeServiceAccountKey(credentials: Record<string, unknown>): Record<string, unknown> {
+  if (typeof credentials.private_key === "string") {
+    credentials = { ...credentials, private_key: credentials.private_key.replace(/\\n/g, "\n") };
+  }
+  return credentials;
+}
+
 function getAuth() {
   const key = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
   if (!key) throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY is not set");
-  const credentials = JSON.parse(key);
+  const credentials = JSON.parse(key) as Record<string, unknown>;
+  const normalized = normalizeServiceAccountKey(credentials);
   return new google.auth.GoogleAuth({
-    credentials,
+    credentials: normalized,
     scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   });
 }

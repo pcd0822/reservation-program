@@ -23,20 +23,23 @@ export async function GET() {
       return NextResponse.json(result);
     }
 
-    let credentials: unknown;
+    let credentials: Record<string, unknown>;
     try {
-      credentials = JSON.parse(key);
+      credentials = JSON.parse(key) as Record<string, unknown>;
     } catch {
       result.error = "GOOGLE_SERVICE_ACCOUNT_KEY가 올바른 JSON이 아니에요.";
       result.hint = "따옴표나 줄바꿈이 빠지지 않았는지, 한 줄로 들어갔는지 확인해 주세요.";
       return NextResponse.json(result);
+    }
+    if (typeof credentials.private_key === "string") {
+      credentials = { ...credentials, private_key: credentials.private_key.replace(/\\n/g, "\n") };
     }
 
     const match = rawId.match(/\/d\/([a-zA-Z0-9-_]+)/);
     const sheetId = match ? match[1] : rawId;
 
     const auth = new google.auth.GoogleAuth({
-      credentials: credentials as Record<string, unknown>,
+      credentials,
       scopes: ["https://www.googleapis.com/auth/spreadsheets"],
     });
     const sheets = google.sheets({ version: "v4", auth });
@@ -58,6 +61,9 @@ export async function GET() {
     } else if (msg.includes("404") || msg.includes("NOT_FOUND")) {
       result.error = "시트를 찾을 수 없어요.";
       result.hint = "REGISTRY_SHEET_ID가 올바른 시트 ID인지, 링크에서 /d/ 와 /edit 사이 부분만 넣었는지 확인해 주세요.";
+    } else if (msg.includes("DECODER") || msg.includes("unsupported") || msg.includes("PEM")) {
+      result.error = "서비스 계정 키의 private_key 형식 오류 (줄바꿈 복구 시도함).";
+      result.hint = "Netlify에 JSON 붙여넣을 때 private_key 안의 \\n 이 그대로 두 문자(백슬래시+n)로 들어가야 해요. 코드에서 자동 복구했으니 재배포 후 다시 시도해 보세요.";
     } else {
       result.error = msg.slice(0, 200);
       result.hint = "Netlify 로그(Deploys → 함수 로그)에서 자세한 오류를 확인할 수 있어요.";
