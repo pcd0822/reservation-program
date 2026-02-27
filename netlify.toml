@@ -1,16 +1,9 @@
-# Netlify 배포 설정 (GitHub 리포지터리 연동)
+# Netlify build config (GitHub repo)
 
 [build]
   command = "npm run build"
-  # Next.js는 Netlify에서 프레임워크 자동 감지 시 publish 경로가 플러그인에 의해 설정됩니다.
-  environment = { NODE_VERSION = "18" }
-
-# Next.js 플러그인 사용 (Netlify 대시보드에서 자동 감지되거나, Build & deploy > Build settings에서 확인)
-# Next.js 14 App Router는 Netlify Essential Next.js 플러그인으로 배포됩니다.
 
 [build.environment]
   NODE_VERSION = "18"
-  NPM_FLAGS = "--legacy-peer-deps"
 
-# 프로덕션 환경 변수는 Netlify 대시보드 > Site settings > Environment variables 에서 설정하세요.
-# - GOOGLE_SERVICE_ACCOUNT_KEY (필수, 시트 연동 시)
+# Set GOOGLE_SERVICE_ACCOUNT_KEY in Netlify Dashboard > Environment variables
