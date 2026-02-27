@@ -152,15 +152,14 @@ export function TabApplications({ tenantId }: Props) {
     setDownloading("pdf");
     try {
       const { jsPDF } = await import("jspdf");
-      const { applyPlugin } = await import("jspdf-autotable");
-      applyPlugin(jsPDF);
+      const { autoTable } = await import("jspdf-autotable");
       const doc = new jsPDF({ orientation: "landscape", unit: "mm" });
       doc.setFont("helvetica");
       doc.setFontSize(12);
       doc.text(selectedSchedule?.title ?? "신청 목록", 14, 12);
       const head = [columns.map((c) => String(c ?? ""))];
       const body = rows.map((row) => row.map((cell) => String(cell ?? "")));
-      doc.autoTable({
+      autoTable(doc, {
         head,
         body,
         startY: 18,
