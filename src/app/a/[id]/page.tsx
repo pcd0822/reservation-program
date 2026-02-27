@@ -18,27 +18,60 @@ export default function AdminPage() {
   const [tenant, setTenant] = useState<{ id: string; sheetId: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [apiError, setApiError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!id) return;
-    fetch(`/api/tenant?id=${id}`)
-      .then((r) => r.json())
-      .then((data) => {
+    setApiError(null);
+    fetch(`/api/tenant?id=${encodeURIComponent(id)}`)
+      .then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          if (r.status === 404) {
+            router.replace("/");
+            return;
+          }
+          setApiError(data.error || "서버 오류가 났어요.");
+          setTenant(null);
+          return;
+        }
         if (data.error) {
           router.replace("/");
           return;
         }
         setTenant(data);
       })
-      .catch(() => router.replace("/"))
+      .catch(() => {
+        setApiError("연결할 수 없어요. 네트워크를 확인해 주세요.");
+        setTenant(null);
+      })
       .finally(() => setLoading(false));
   }, [id, router]);
 
-  if (loading || !tenant) {
+  if (loading && !tenant && !apiError) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-pastel-cream">
         <div className="text-gray-500">로딩 중…</div>
       </main>
     );
+  }
+
+  if (apiError) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-pastel-cream">
+        <div className="card-soft p-6 max-w-md text-center space-y-4">
+          <p className="text-red-600 font-medium">{apiError}</p>
+          <p className="text-sm text-gray-600">Netlify 등 서버리스 환경에서는 DB 설정이 필요해요. README를 확인해 주세요.</p>
+          <Link href="/" className="btn-bounce inline-block rounded-2xl bg-pastel-pink px-4 py-2 font-bold text-gray-800">
+            처음으로
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  if (!tenant) {
+    return null;
   }
 
   const tabs: { key: Tab; label: string }[] = [

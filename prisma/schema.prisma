@@ -16,15 +16,16 @@ model Tenant {
 }
 
 model ScheduleItem {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   tenantId     String
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   title        String
   type         String   // "week" | "day" | "time"
   dateStart    DateTime
   dateEnd      DateTime
   timeLabel    String?  // for type "time", e.g. "1교시", "09:00"
   maxCapacity  Int      @default(1)
+  applyUntil   DateTime? // 예약 신청 마감일시 (null = 마감 없음)
   customFields String   // JSON array of { id, label, type, required }
   createdAt    DateTime @default(now())
   applications Application[]

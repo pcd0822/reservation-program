@@ -17,6 +17,7 @@ export function TabSchedules({ tenantId }: Props) {
   const [dateEnd, setDateEnd] = useState("");
   const [timeLabel, setTimeLabel] = useState("");
   const [maxCapacity, setMaxCapacity] = useState(5);
+  const [applyUntil, setApplyUntil] = useState("");
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [sameSlotTitles, setSameSlotTitles] = useState<string[]>([""]);
   const [creating, setCreating] = useState(false);
@@ -72,6 +73,7 @@ export function TabSchedules({ tenantId }: Props) {
             dateEnd: dateE.toISOString(),
             timeLabel: type === "time" ? timeLabel || null : null,
             maxCapacity,
+            applyUntil: applyUntil ? new Date(applyUntil).toISOString() : null,
             customFields: JSON.stringify(customFields),
           }),
         });
@@ -263,6 +265,17 @@ export function TabSchedules({ tenantId }: Props) {
           onChange={(e) => setMaxCapacity(Math.max(1, parseInt(e.target.value, 10) || 1))}
           className="w-24 rounded-2xl border-2 border-pastel-lavender px-3 py-2"
         />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">예약 신청 마감일시 (선택)</label>
+        <input
+          type="datetime-local"
+          value={applyUntil}
+          onChange={(e) => setApplyUntil(e.target.value)}
+          className="w-full rounded-2xl border-2 border-pastel-lavender px-3 py-2"
+        />
+        <p className="text-xs text-gray-500 mt-1">비워두면 마감 시간 없이 인원만 채워질 때까지 신청받아요.</p>
       </div>
 
       <CustomFieldsEditor fields={customFields} onChange={setCustomFields} />

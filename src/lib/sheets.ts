@@ -18,6 +18,10 @@ export function extractSheetIdFromUrl(url: string): string | null {
   return match ? match[1] : null;
 }
 
+/**
+ * 신청 1건당 1행을 추가합니다. 같은 일정에 여러 명이 신청하면 호출될 때마다 각각 한 행씩 추가되며,
+ * 각 셀에는 하나의 값만 들어가 후속 데이터 관리(필터, 피벗 등)가 쉽습니다.
+ */
 export async function appendRowToSheet(
   sheetId: string,
   row: (string | number)[]

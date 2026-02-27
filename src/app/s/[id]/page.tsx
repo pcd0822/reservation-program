@@ -5,6 +5,7 @@ import { useEffect, useState, useMemo } from "react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { parseCustomFields, type CustomField } from "@/lib/utils";
+import { XCircle, Users } from "lucide-react";
 
 type ScheduleItem = {
   id: string;
@@ -14,6 +15,7 @@ type ScheduleItem = {
   dateEnd: string;
   timeLabel: string | null;
   maxCapacity: number;
+  applyUntil: string | null;
   customFields: string;
   _count?: { applications: number };
 };
@@ -51,6 +53,13 @@ export default function StudentPage() {
     return map;
   };
   const counts = getScheduleCounts();
+  const now = new Date();
+  const isClosed = (s: ScheduleItem) => {
+    const count = counts.get(s.id) ?? 0;
+    if (count >= s.maxCapacity) return { closed: true, reason: "인원 마감" as const };
+    if (s.applyUntil && now > new Date(s.applyUntil)) return { closed: true, reason: "신청 기간 마감" as const };
+    return { closed: false, reason: null };
+  };
 
   const validateSchedule = (s: ScheduleItem): string | null => {
     const fields = parseCustomFields(s.customFields);
@@ -71,9 +80,9 @@ export default function StudentPage() {
       setMessage({ type: "err", text: err });
       return;
     }
-    const count = counts.get(scheduleId) ?? 0;
-    if (count >= s.maxCapacity) {
-      setMessage({ type: "err", text: "이 일정은 마감되었어요." });
+    const closed = isClosed(s);
+    if (closed.closed) {
+      setMessage({ type: "err", text: `이 일정은 ${closed.reason}되었어요.` });
       return;
     }
     setSubmitting(scheduleId);
@@ -176,35 +185,49 @@ export default function StudentPage() {
           <ul className="space-y-3">
             {schedules.map((s) => {
               const count = counts.get(s.id) ?? 0;
-              const full = count >= s.maxCapacity;
-              const canApply = !full && !submitting;
+              const closed = isClosed(s);
+              const canApply = !closed.closed && !submitting;
               return (
                 <li
                   key={s.id}
                   className={`rounded-2xl border-2 p-4 transition-all ${
-                    full
-                      ? "bg-gray-100 border-gray-300 text-gray-500"
+                    closed.closed
+                      ? "bg-gray-100/90 border-gray-300 opacity-90"
                       : "bg-white/90 border-pastel-lavender hover:border-pastel-pink hover:shadow-md"
                   }`}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="font-medium text-gray-800">{s.title}</p>
-                      <p className="text-sm text-gray-600">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className={`font-medium ${closed.closed ? "text-gray-500 line-through" : "text-gray-800"}`}>
+                          {s.title}
+                        </p>
+                        {closed.closed && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 text-red-700 px-2.5 py-0.5 text-xs font-bold">
+                            <XCircle className="w-3.5 h-3.5" />
+                            {closed.reason}
+                          </span>
+                        )}
+                      </div>
+                      <p className={`text-sm mt-0.5 ${closed.closed ? "text-gray-400" : "text-gray-600"}`}>
                         {format(new Date(s.dateStart), "yyyy년 M월 d일 (EEE)", { locale: ko })}
                         {s.timeLabel ? ` ${s.timeLabel}` : ""}
                       </p>
-                      <p className="text-sm text-gray-500">
+                      <p className={`text-sm mt-1 flex items-center gap-1 ${closed.closed ? "text-gray-400" : "text-gray-500"}`}>
+                        <Users className="w-4 h-4 shrink-0" />
                         신청 {count}/{s.maxCapacity}명
+                        {closed.closed && (
+                          <span className="text-red-600 font-bold ml-1">· 마감됨</span>
+                        )}
                       </p>
                     </div>
                     <button
                       type="button"
                       onClick={() => canApply && handleApply(s.id)}
                       disabled={!canApply}
-                      className="btn-bounce rounded-2xl px-5 py-2.5 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed bg-pastel-pink text-gray-800 shadow hover:shadow-lg"
+                      className="btn-bounce rounded-2xl px-5 py-2.5 font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed shrink-0 bg-pastel-pink text-gray-800 shadow hover:shadow-lg disabled:bg-gray-300 disabled:text-gray-500"
                     >
-                      {full ? "마감" : submitting === s.id ? "신청 중…" : "신청하기"}
+                      {closed.closed ? "신청 마감" : submitting === s.id ? "신청 중…" : "신청하기"}
                     </button>
                   </div>
                 </li>

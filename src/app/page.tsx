@@ -18,13 +18,18 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "create" }),
       });
-      const data = await res.json();
-      if (data.adminUrl) {
+      let data: { adminUrl?: string; error?: string } = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = {};
+      }
+      if (res.ok && data.adminUrl) {
         const url = data.adminUrl.startsWith("http") ? data.adminUrl : `${window.location.origin}${data.adminUrl}`;
         window.location.href = url;
         return;
       }
-      setError(data.error || "일정을 만들지 못했어요. 다시 시도해 주세요.");
+      setError(data.error || (res.ok ? "일정을 만들지 못했어요." : "서버 오류가 났어요. DB 연결을 확인해 주세요."));
     } catch {
       setError("네트워크 오류가 났어요. 다시 시도해 주세요.");
     } finally {

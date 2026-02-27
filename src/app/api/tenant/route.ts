@@ -40,22 +40,27 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    console.error("[POST /api/tenant]", e);
+    return NextResponse.json({ error: "서버 오류가 났어요. DB 연결을 확인해 주세요." }, { status: 500 });
   }
 }
 
 export async function GET(request: NextRequest) {
-  const id = request.nextUrl.searchParams.get("id");
-  if (!id) {
-    return NextResponse.json({ error: "id required" }, { status: 400 });
+  try {
+    const id = request.nextUrl.searchParams.get("id");
+    if (!id) {
+      return NextResponse.json({ error: "id required" }, { status: 400 });
+    }
+    const tenant = await prisma.tenant.findUnique({
+      where: { id },
+      select: { id: true, sheetId: true, createdAt: true },
+    });
+    if (!tenant) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    return NextResponse.json(tenant);
+  } catch (e) {
+    console.error("[GET /api/tenant]", e);
+    return NextResponse.json({ error: "서버 오류가 났어요. DB 연결을 확인해 주세요." }, { status: 500 });
   }
-  const tenant = await prisma.tenant.findUnique({
-    where: { id },
-    select: { id: true, sheetId: true, createdAt: true },
-  });
-  if (!tenant) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-  return NextResponse.json(tenant);
 }

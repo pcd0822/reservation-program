@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
       dateEnd,
       timeLabel,
       maxCapacity,
+      applyUntil,
       customFields,
     } = body as {
       tenantId: string;
@@ -36,6 +37,7 @@ export async function POST(request: NextRequest) {
       dateEnd: string;
       timeLabel?: string;
       maxCapacity: number;
+      applyUntil?: string | null;
       customFields: string;
     };
 
@@ -55,6 +57,7 @@ export async function POST(request: NextRequest) {
         dateEnd: new Date(dateEnd),
         timeLabel: timeLabel ?? null,
         maxCapacity: Math.max(1, Number(maxCapacity) || 1),
+        applyUntil: applyUntil ? new Date(applyUntil) : null,
         customFields: typeof customFields === "string" ? customFields : JSON.stringify(customFields ?? []),
       },
     });

@@ -51,6 +51,10 @@ export async function POST(request: NextRequest) {
     if (schedule._count.applications >= schedule.maxCapacity) {
       return NextResponse.json({ error: "해당 일정은 마감되었습니다." }, { status: 400 });
     }
+    const now = new Date();
+    if (schedule.applyUntil && now > schedule.applyUntil) {
+      return NextResponse.json({ error: "해당 일정의 신청 기간이 마감되었습니다." }, { status: 400 });
+    }
 
     const fields = parseCustomFields(schedule.customFields);
     for (const f of fields) {
@@ -77,14 +81,20 @@ export async function POST(request: NextRequest) {
     const tenant = application.tenant;
     if (tenant.sheetId) {
       try {
+        // 한 행 = 한 명의 신청. 같은 일정에 N명이 신청하면 N행이 추가되며, 각 셀에는 하나의 값만 저장.
         const headers = ["일정명", "날짜", "시간", "신청일시", ...fields.map((f) => f.label)];
         await ensureHeaderRow(tenant.sheetId, headers);
+        const toSingleValue = (v: unknown): string => {
+          if (v === undefined || v === null) return "";
+          if (Array.isArray(v)) return v.map((x) => String(x)).join(", ");
+          return String(v);
+        };
         const row = [
           application.scheduleItem.title,
           application.scheduleItem.dateStart.toISOString().slice(0, 10),
           application.scheduleItem.timeLabel ?? "",
           new Date().toISOString(),
-          ...fields.map((f) => String(data[f.id] ?? "")),
+          ...fields.map((f) => toSingleValue(data[f.id])),
         ];
         await appendRowToSheet(tenant.sheetId, row);
       } catch (sheetError) {
