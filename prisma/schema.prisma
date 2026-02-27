@@ -1,0 +1,41 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  sheetId   String?
+  createdAt DateTime @default(now())
+  schedules ScheduleItem[]
+  applications Application[]
+}
+
+model ScheduleItem {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title        String
+  type         String   // "week" | "day" | "time"
+  dateStart    DateTime
+  dateEnd      DateTime
+  timeLabel    String?  // for type "time", e.g. "1교시", "09:00"
+  maxCapacity  Int      @default(1)
+  customFields String   // JSON array of { id, label, type, required }
+  createdAt    DateTime @default(now())
+  applications Application[]
+}
+
+model Application {
+  id             String       @id @default(cuid())
+  scheduleItemId String
+  scheduleItem   ScheduleItem @relation(fields: [scheduleItemId], references: [id], onDelete: Cascade)
+  tenantId       String
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  data           String       // JSON object of field id -> value
+  createdAt      DateTime     @default(now())
+}

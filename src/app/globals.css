@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --pastel-pink: #ffb5c2;
+  --pastel-mint: #98d8aa;
+  --pastel-peach: #ffdab9;
+  --pastel-lavender: #e6e6fa;
+  --pastel-sky: #b4d7e8;
+  --pastel-cream: #fff8e7;
+}
+
+body {
+  @apply bg-pastel-cream text-gray-800 antialiased;
+}
+
+@layer utilities {
+  .btn-bounce {
+    @apply transition-all duration-150 ease-out active:scale-95 hover:scale-[1.05] hover:shadow-lg;
+  }
+  .card-soft {
+    @apply rounded-3xl shadow-lg border border-white/50 bg-white/80 backdrop-blur;
+  }
+}
+
+/* 통통 튀는 버튼 클릭 느낌 */
+@media (hover: hover) {
+  .btn-bounce:active {
+    animation: squash 0.2s ease;
+  }
+}
+@keyframes squash {
+  0% { transform: scale(1.05); }
+  50% { transform: scale(0.96); }
+  100% { transform: scale(1); }
+}
