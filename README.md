@@ -98,7 +98,10 @@ npm run dev
 1. GitHub에 코드 푸시 후 Netlify에서 리포지터리 연결
 2. **Environment variables** 에 다음 설정:
    - `REGISTRY_SHEET_ID`: 등록용 구글 시트 ID
-   - `GOOGLE_SERVICE_ACCOUNT_KEY`: 서비스 계정 JSON (한 줄)
+   - `GOOGLE_SERVICE_ACCOUNT_KEY`: 서비스 계정 JSON **한 줄**로 붙여넣기.  
+     **중요:** `private_key` 안의 줄바꿈은 반드시 **백슬래시+n** 두 문자(`\n`)로 넣어야 합니다.  
+     예: `"private_key":"-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n"`  
+     (구글 콘솔에서 JSON 다운로드한 그대로 붙여넣으면 이 형식입니다.)
 3. 배포 후 사이트 URL로 접속해 사용
 
 **DATABASE_URL·Neon·Prisma는 사용하지 않습니다.** 사용자 데이터는 모두 사용자가 연결한 구글 시트에만 저장됩니다.
@@ -112,7 +115,8 @@ npm run dev
    - 등록용 구글 시트를 **편집자** 권한으로 **서비스 계정 이메일**에 공유했는지 확인.  
    - (앱 첫 화면 또는 시트 연결 탭에 표시되는 이메일)
 3. **GOOGLE_SERVICE_ACCOUNT_KEY**  
-   - JSON 전체가 한 줄로 들어가 있는지, 따옴표·줄바꿈이 빠져 있지 않은지 확인.
+   - JSON을 한 줄로 넣을 때, `private_key` 값 안에는 **실제 줄바꿈이 아니라** `\n`(백슬래시+n) 두 문자가 들어가 있어야 합니다.  
+   - 수동으로 수정했다면 `"-----BEGIN PRIVATE KEY-----\nMIIE..."` 처럼 줄바꿈 자리에 `\n`이 있는지 확인하세요.
 4. **재배포**  
    - 환경 변수 수정 후 Netlify에서 **Trigger deploy**로 다시 배포했는지 확인.
 

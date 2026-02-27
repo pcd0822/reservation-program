@@ -16,21 +16,10 @@ const SCHEDULE_HEADERS = [
   "CustomFields",
 ];
 
-/** Netlify 등에서 private_key 줄바꿈이 깨지면 DECODER 오류. base64만 추출 후 64자 단위로 재조립 */
+/** JSON의 private_key에서 이스케이프된 줄바꿈(\\n)을 실제 줄바꿈으로 복구 */
 function normalizeServiceAccountKey(credentials: Record<string, unknown>): Record<string, unknown> {
   if (typeof credentials.private_key !== "string") return credentials;
-  const raw = credentials.private_key.replace(/\\n/g, "\n").replace(/\r\n/g, "\n");
-  const begin = "-----BEGIN PRIVATE KEY-----";
-  const end = "-----END PRIVATE KEY-----";
-  if (!raw.includes(begin) || !raw.includes(end)) return { ...credentials, private_key: raw };
-  const oneLine = raw.replace(/\s/g, "");
-  const start = oneLine.indexOf(begin) + begin.length;
-  const endIdx = oneLine.indexOf(end);
-  const base64 = oneLine.slice(start, endIdx).replace(/[^A-Za-z0-9+/=]/g, "");
-  const lines: string[] = [begin];
-  for (let i = 0; i < base64.length; i += 64) lines.push(base64.slice(i, i + 64));
-  lines.push(end);
-  const pk = lines.join("\n") + "\n";
+  const pk = credentials.private_key.replace(/\\n/g, "\n").replace(/\r\n/g, "\n");
   return { ...credentials, private_key: pk };
 }
 
