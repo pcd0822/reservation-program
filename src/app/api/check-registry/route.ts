@@ -32,20 +32,21 @@ export async function GET() {
       return NextResponse.json(result);
     }
     if (typeof credentials.private_key === "string") {
-      let pk = credentials.private_key.replace(/\\n/g, "\n");
-      if (!pk.includes("\n") && pk.includes("-----BEGIN PRIVATE KEY-----")) {
-        const begin = "-----BEGIN PRIVATE KEY-----";
-        const end = "-----END PRIVATE KEY-----";
-        pk = pk.replace(/\s/g, "");
-        const start = pk.indexOf(begin) + begin.length;
-        const endIdx = pk.indexOf(end);
-        const base64 = pk.slice(start, endIdx).replace(/\s/g, "");
+      const raw = credentials.private_key.replace(/\\n/g, "\n").replace(/\r\n/g, "\n");
+      const begin = "-----BEGIN PRIVATE KEY-----";
+      const end = "-----END PRIVATE KEY-----";
+      if (raw.includes(begin) && raw.includes(end)) {
+        const oneLine = raw.replace(/\s/g, "");
+        const start = oneLine.indexOf(begin) + begin.length;
+        const endIdx = oneLine.indexOf(end);
+        const base64 = oneLine.slice(start, endIdx).replace(/[^A-Za-z0-9+/=]/g, "");
         const lines: string[] = [begin];
         for (let i = 0; i < base64.length; i += 64) lines.push(base64.slice(i, i + 64));
         lines.push(end);
-        pk = lines.join("\n") + "\n";
+        credentials = { ...credentials, private_key: lines.join("\n") + "\n" };
+      } else {
+        credentials = { ...credentials, private_key: raw };
       }
-      credentials = { ...credentials, private_key: pk };
     }
 
     const match = rawId.match(/\/d\/([a-zA-Z0-9-_]+)/);
