@@ -16,12 +16,24 @@ const SCHEDULE_HEADERS = [
   "CustomFields",
 ];
 
-/** Netlify 등 환경 변수에 넣을 때 private_key 줄바꿈이 깨지면 DECODER 오류가 난다. 복구 처리 */
+/** Netlify 등 환경 변수에서 private_key 줄바꿈이 깨지면 DECODER 오류. 여러 형태 복구 */
 function normalizeServiceAccountKey(credentials: Record<string, unknown>): Record<string, unknown> {
-  if (typeof credentials.private_key === "string") {
-    credentials = { ...credentials, private_key: credentials.private_key.replace(/\\n/g, "\n") };
+  if (typeof credentials.private_key !== "string") return credentials;
+  let pk = credentials.private_key.replace(/\\n/g, "\n");
+
+  if (!pk.includes("\n") && pk.includes("-----BEGIN PRIVATE KEY-----")) {
+    const begin = "-----BEGIN PRIVATE KEY-----";
+    const end = "-----END PRIVATE KEY-----";
+    pk = pk.replace(/\s/g, "");
+    const start = pk.indexOf(begin) + begin.length;
+    const endIdx = pk.indexOf(end);
+    const base64 = pk.slice(start, endIdx).replace(/\s/g, "");
+    const lines: string[] = [begin];
+    for (let i = 0; i < base64.length; i += 64) lines.push(base64.slice(i, i + 64));
+    lines.push(end);
+    pk = lines.join("\n") + "\n";
   }
-  return credentials;
+  return { ...credentials, private_key: pk };
 }
 
 function getAuth() {

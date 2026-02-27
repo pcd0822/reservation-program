@@ -32,7 +32,20 @@ export async function GET() {
       return NextResponse.json(result);
     }
     if (typeof credentials.private_key === "string") {
-      credentials = { ...credentials, private_key: credentials.private_key.replace(/\\n/g, "\n") };
+      let pk = credentials.private_key.replace(/\\n/g, "\n");
+      if (!pk.includes("\n") && pk.includes("-----BEGIN PRIVATE KEY-----")) {
+        const begin = "-----BEGIN PRIVATE KEY-----";
+        const end = "-----END PRIVATE KEY-----";
+        pk = pk.replace(/\s/g, "");
+        const start = pk.indexOf(begin) + begin.length;
+        const endIdx = pk.indexOf(end);
+        const base64 = pk.slice(start, endIdx).replace(/\s/g, "");
+        const lines: string[] = [begin];
+        for (let i = 0; i < base64.length; i += 64) lines.push(base64.slice(i, i + 64));
+        lines.push(end);
+        pk = lines.join("\n") + "\n";
+      }
+      credentials = { ...credentials, private_key: pk };
     }
 
     const match = rawId.match(/\/d\/([a-zA-Z0-9-_]+)/);
