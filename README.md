@@ -54,7 +54,9 @@ npm install
 - 구글 스프레드시트 **한 개**를 새로 만듭니다. (이름 예: "일정예약 등록")
 - 해당 시트를 **편집자** 권한으로 **서비스 계정 이메일**에 공유합니다.
 - 시트 URL에서 **시트 ID**를 복사합니다.  
-  예: `https://docs.google.com/spreadsheets/d/여기가ID/edit` → `REGISTRY_SHEET_ID`에 `여기가ID` 입력
+  - 링크 형식: `https://docs.google.com/spreadsheets/d/`**여기가_시트_ID**`/edit?usp=sharing`  
+  - **`/d/` 바로 다음부터 `/edit` 직전까지**가 시트 ID입니다. (영문·숫자·하이픈·언더스코어로 된 긴 문자열)  
+  - 환경 변수에는 **시트 ID만** 넣거나, **전체 URL**을 넣어도 앱이 ID를 자동으로 추출합니다.
 
 **서비스 계정**
 
@@ -100,6 +102,23 @@ npm run dev
 3. 배포 후 사이트 URL로 접속해 사용
 
 **DATABASE_URL·Neon·Prisma는 사용하지 않습니다.** 사용자 데이터는 모두 사용자가 연결한 구글 시트에만 저장됩니다.
+
+### "REGISTRY_SHEET_ID와 구글 시트 연동을 확인해 주세요" 오류가 날 때
+
+1. **시트 ID 확인**  
+   - Netlify 환경 변수 `REGISTRY_SHEET_ID`에 **등록용 시트**의 ID만 들어가 있는지 확인.  
+   - 링크 전체를 넣었다면 `/d/` 와 `/edit` 사이 부분만 들어가야 함. (전체 URL을 넣어도 동작하도록 되어 있음)
+2. **등록 시트 공유**  
+   - 등록용 구글 시트를 **편집자** 권한으로 **서비스 계정 이메일**에 공유했는지 확인.  
+   - (앱 첫 화면 또는 시트 연결 탭에 표시되는 이메일)
+3. **GOOGLE_SERVICE_ACCOUNT_KEY**  
+   - JSON 전체가 한 줄로 들어가 있는지, 따옴표·줄바꿈이 빠져 있지 않은지 확인.
+4. **재배포**  
+   - 환경 변수 수정 후 Netlify에서 **Trigger deploy**로 다시 배포했는지 확인.
+
+5. **연동 진단**  
+   - 배포된 사이트에서 **`https://사이트주소.netlify.app/api/check-registry`** 를 브라우저로 열어 보세요.  
+   - `ok: true` 이면 연동 정상, `ok: false` 이면 `error`와 `hint`에 원인이 나옵니다.
 
 ## 기술 스택
 

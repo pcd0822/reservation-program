@@ -27,9 +27,12 @@ function getAuth() {
 }
 
 function getRegistrySheetId(): string {
-  const id = process.env.REGISTRY_SHEET_ID;
-  if (!id) throw new Error("REGISTRY_SHEET_ID is not set. 앱용 등록 시트를 만들고 공유한 뒤 환경 변수에 넣어 주세요.");
-  return id;
+  const raw = process.env.REGISTRY_SHEET_ID?.trim();
+  if (!raw) throw new Error("REGISTRY_SHEET_ID is not set. 앱용 등록 시트를 만들고 공유한 뒤 환경 변수에 넣어 주세요.");
+  // URL을 넣었으면 /d/ 와 /edit 사이의 ID만 추출 (영문·숫자·하이픈·언더스코어만)
+  const fromUrl = extractSheetIdFromUrl(raw);
+  if (fromUrl) return fromUrl;
+  return raw;
 }
 
 export function extractSheetIdFromUrl(url: string): string | null {

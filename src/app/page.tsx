@@ -29,7 +29,7 @@ export default function HomePage() {
         window.location.href = url;
         return;
       }
-      setError(data.error || (res.ok ? "일정을 만들지 못했어요." : "서버 오류가 났어요. DB 연결을 확인해 주세요."));
+      setError(data.error || (res.ok ? "일정을 만들지 못했어요." : "서버 오류가 났어요. 아래 연동 확인 링크로 원인을 확인해 보세요."));
     } catch {
       setError("네트워크 오류가 났어요. 다시 시도해 주세요.");
     } finally {
@@ -70,7 +70,14 @@ export default function HomePage() {
         </p>
 
         {error && (
-          <p className="text-sm text-red-600 bg-red-50 rounded-2xl px-3 py-2">{error}</p>
+          <div className="text-sm text-red-600 bg-red-50 rounded-2xl px-3 py-2 space-y-1">
+            <p>{error}</p>
+            <p className="text-gray-600">
+              <a href="/api/check-registry" target="_blank" rel="noopener noreferrer" className="underline">
+                연동 확인 (원인 진단)
+              </a>
+            </p>
+          </div>
         )}
 
         <button

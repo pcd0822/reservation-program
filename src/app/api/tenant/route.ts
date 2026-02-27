@@ -40,11 +40,21 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   } catch (e) {
+    const err = e as { message?: string };
+    const msg = String(err?.message ?? e);
     console.error("[POST /api/tenant]", e);
-    return NextResponse.json(
-      { error: "서버 오류가 났어요. REGISTRY_SHEET_ID와 구글 시트 연동을 확인해 주세요." },
-      { status: 500 }
-    );
+
+    let error = "서버 오류가 났어요. REGISTRY_SHEET_ID와 구글 시트 연동을 확인해 주세요.";
+    if (msg.includes("REGISTRY_SHEET_ID is not set")) {
+      error = "REGISTRY_SHEET_ID가 설정되지 않았어요. Netlify 환경 변수를 확인해 주세요.";
+    } else if (msg.includes("GOOGLE_SERVICE_ACCOUNT_KEY")) {
+      error = "서비스 계정 키가 설정되지 않았거나 JSON 형식이 아니에요.";
+    } else if (msg.includes("403") || msg.includes("PERMISSION_DENIED") || msg.includes("Forbidden")) {
+      error = "등록 시트 권한이 없어요. 등록용 시트를 서비스 계정에 [편집자]로 공유해 주세요.";
+    } else if (msg.includes("404") || msg.includes("NOT_FOUND")) {
+      error = "등록 시트를 찾을 수 없어요. REGISTRY_SHEET_ID(시트 ID)가 맞는지 확인해 주세요.";
+    }
+    return NextResponse.json({ error }, { status: 500 });
   }
 }
 
@@ -60,10 +70,20 @@ export async function GET(request: NextRequest) {
     }
     return NextResponse.json({ id, sheetId: tenant.sheetId });
   } catch (e) {
+    const err = e as { message?: string };
+    const msg = String(err?.message ?? e);
     console.error("[GET /api/tenant]", e);
-    return NextResponse.json(
-      { error: "서버 오류가 났어요. REGISTRY_SHEET_ID를 확인해 주세요." },
-      { status: 500 }
-    );
+
+    let error = "서버 오류가 났어요. REGISTRY_SHEET_ID와 구글 시트 연동을 확인해 주세요.";
+    if (msg.includes("REGISTRY_SHEET_ID is not set")) {
+      error = "REGISTRY_SHEET_ID가 설정되지 않았어요. Netlify 환경 변수를 확인해 주세요.";
+    } else if (msg.includes("GOOGLE_SERVICE_ACCOUNT_KEY")) {
+      error = "서비스 계정 키가 설정되지 않았거나 JSON 형식이 아니에요.";
+    } else if (msg.includes("403") || msg.includes("PERMISSION_DENIED") || msg.includes("Forbidden")) {
+      error = "등록 시트 권한이 없어요. 등록용 시트를 서비스 계정에 [편집자]로 공유해 주세요.";
+    } else if (msg.includes("404") || msg.includes("NOT_FOUND")) {
+      error = "등록 시트를 찾을 수 없어요. REGISTRY_SHEET_ID가 맞는지 확인해 주세요.";
+    }
+    return NextResponse.json({ error }, { status: 500 });
   }
 }
