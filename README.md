@@ -117,10 +117,13 @@ npm run dev
 3. **GOOGLE_SERVICE_ACCOUNT_KEY**  
    - JSON을 한 줄로 넣을 때, `private_key` 값 안에는 **실제 줄바꿈이 아니라** `\n`(백슬래시+n) 두 문자가 들어가 있어야 합니다.  
    - 수동으로 수정했다면 `"-----BEGIN PRIVATE KEY-----\nMIIE..."` 처럼 줄바꿈 자리에 `\n`이 있는지 확인하세요.
-4. **재배포**  
+4. **Google Sheets API 사용 설정**  
+   - "Google Sheets API has not been used... or it is disabled" 오류가 나면, [Google Cloud Console → API 라이브러리](https://console.cloud.google.com/apis/library)로 갑니다.  
+   - 상단에 **「프로젝트 선택」**이 보이면 클릭해, **서비스 계정을 만든 프로젝트**(예: reservation-program)를 선택한 뒤, **Google Sheets API**를 검색해 **사용 설정**을 눌러 주세요.
+5. **재배포**  
    - 환경 변수 수정 후 Netlify에서 **Trigger deploy**로 다시 배포했는지 확인.
 
-5. **연동 진단**  
+6. **연동 진단**  
    - 배포된 사이트에서 **`https://사이트주소.netlify.app/api/check-registry`** 를 브라우저로 열어 보세요.  
    - `ok: true` 이면 연동 정상, `ok: false` 이면 `error`와 `hint`에 원인이 나옵니다.
 

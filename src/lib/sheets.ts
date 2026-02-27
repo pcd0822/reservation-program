@@ -1,6 +1,5 @@
 import { google } from "googleapis";
 
-const REGISTRY_SHEET_NAME = "Sheet1";
 const SCHEDULE_SHEET_NAME = "일정";
 const APPLICATION_SHEET_NAME = "Sheet1"; // 신청 = 첫 시트
 
@@ -37,10 +36,22 @@ function getAuth() {
 function getRegistrySheetId(): string {
   const raw = process.env.REGISTRY_SHEET_ID?.trim();
   if (!raw) throw new Error("REGISTRY_SHEET_ID is not set. 앱용 등록 시트를 만들고 공유한 뒤 환경 변수에 넣어 주세요.");
-  // URL을 넣었으면 /d/ 와 /edit 사이의 ID만 추출 (영문·숫자·하이픈·언더스코어만)
   const fromUrl = extractSheetIdFromUrl(raw);
   if (fromUrl) return fromUrl;
   return raw;
+}
+
+/** 등록 시트의 첫 시트 이름(예: Sheet1, 시트1). 범위에 쓸 때 작은따옴표 이스케이프용 */
+async function getRegistryFirstSheetName(): Promise<string> {
+  const auth = getAuth();
+  const sheets = google.sheets({ version: "v4", auth });
+  const registryId = getRegistrySheetId();
+  const res = await sheets.spreadsheets.get({
+    spreadsheetId: registryId,
+    fields: "sheets(properties(title))",
+  });
+  const title = res.data.sheets?.[0]?.properties?.title ?? "Sheet1";
+  return title.replace(/'/g, "''");
 }
 
 export function extractSheetIdFromUrl(url: string): string | null {
@@ -54,22 +65,23 @@ export async function registryAppendTenant(tenantId: string): Promise<void> {
   const auth = getAuth();
   const sheets = google.sheets({ version: "v4", auth });
   const registryId = getRegistrySheetId();
+  const sheetName = await getRegistryFirstSheetName();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: registryId,
-    range: `${REGISTRY_SHEET_NAME}!A1:B1`,
+    range: `'${sheetName}'!A1:B1`,
   });
   const row0 = (res.data.values?.[0] ?? []) as string[];
   if (row0.length === 0 || row0[0] === "") {
     await sheets.spreadsheets.values.update({
       spreadsheetId: registryId,
-      range: `${REGISTRY_SHEET_NAME}!A1`,
+      range: `'${sheetName}'!A1`,
       valueInputOption: "USER_ENTERED",
       requestBody: { values: [["TenantId", "SheetId"]] },
     });
   }
   await sheets.spreadsheets.values.append({
     spreadsheetId: registryId,
-    range: `${REGISTRY_SHEET_NAME}!A:B`,
+    range: `'${sheetName}'!A:B`,
     valueInputOption: "USER_ENTERED",
     insertDataOption: "INSERT_ROWS",
     requestBody: { values: [[tenantId, ""]] },
@@ -80,9 +92,10 @@ export async function registryUpdateSheetId(tenantId: string, sheetId: string): 
   const auth = getAuth();
   const sheets = google.sheets({ version: "v4", auth });
   const registryId = getRegistrySheetId();
+  const sheetName = await getRegistryFirstSheetName();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: registryId,
-    range: `${REGISTRY_SHEET_NAME}!A:B`,
+    range: `'${sheetName}'!A:B`,
   });
   const rows = (res.data.values ?? []) as string[][];
   const header = rows[0] ?? [];
@@ -91,7 +104,7 @@ export async function registryUpdateSheetId(tenantId: string, sheetId: string): 
       if (rows[i][0] === tenantId) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: registryId,
-          range: `${REGISTRY_SHEET_NAME}!B${i + 1}`,
+          range: `'${sheetName}'!B${i + 1}`,
           valueInputOption: "USER_ENTERED",
           requestBody: { values: [[sheetId]] },
         });
@@ -107,9 +120,10 @@ export async function registryGetTenant(tenantId: string): Promise<{ sheetId: st
   const auth = getAuth();
   const sheets = google.sheets({ version: "v4", auth });
   const registryId = getRegistrySheetId();
+  const sheetName = await getRegistryFirstSheetName();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: registryId,
-    range: `${REGISTRY_SHEET_NAME}!A:B`,
+    range: `'${sheetName}'!A:B`,
   });
   const rows = (res.data.values ?? []) as string[][];
   for (let i = 0; i < rows.length; i++) {

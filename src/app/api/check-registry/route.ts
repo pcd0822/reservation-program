@@ -45,9 +45,14 @@ export async function GET() {
     });
     const sheets = google.sheets({ version: "v4", auth });
 
+    const meta = await sheets.spreadsheets.get({
+      spreadsheetId: sheetId,
+      fields: "sheets(properties(title))",
+    });
+    const firstSheetTitle = (meta.data.sheets?.[0]?.properties?.title ?? "Sheet1").replace(/'/g, "''");
     await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: "Sheet1!A1:B1",
+      range: `'${firstSheetTitle}'!A1:B1`,
     });
 
     result.ok = true;
@@ -65,6 +70,12 @@ export async function GET() {
     } else if (msg.includes("DECODER") || msg.includes("unsupported") || msg.includes("PEM")) {
       result.error = "서비스 계정 키의 private_key 형식 오류.";
       result.hint = "Netlify 환경 변수 GOOGLE_SERVICE_ACCOUNT_KEY의 JSON에서, private_key 값 안의 줄바꿈을 백슬래시+n(\\n) 두 문자로 넣었는지 확인해 주세요. 구글 콘솔에서 받은 JSON을 그대로 한 줄로 붙여넣으면 됩니다.";
+    } else if (msg.includes("has not been used") || msg.includes("or it is disabled") || msg.includes("Enable it")) {
+      result.error = "이 프로젝트에서 Google Sheets API가 사용 설정되지 않았어요.";
+      result.hint = "Google Cloud Console에서 상단 [프로젝트 선택]을 눌러 서비스 계정을 만든 프로젝트를 고른 뒤, Google Sheets API를 검색해 [사용 설정]을 누르세요. https://console.cloud.google.com/apis/library";
+    } else if (msg.includes("Unable to parse range")) {
+      result.error = "등록 시트의 범위를 읽을 수 없어요.";
+      result.hint = "등록용 구글 시트에 시트가 하나 이상 있는지 확인해 주세요. (첫 시트 이름은 Sheet1·시트1 등 아무 이름이어도 됩니다.)";
     } else {
       result.error = msg.slice(0, 200);
       result.hint = "Netlify 로그(Deploys → 함수 로그)에서 자세한 오류를 확인할 수 있어요.";
