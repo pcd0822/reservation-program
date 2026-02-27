@@ -151,7 +151,7 @@ export default function HomePage() {
                 />
                 <button
                   type="button"
-                  onClick={goAdmin}
+                  onClick={() => goAdmin()}
                   className="btn-bounce rounded-2xl bg-pastel-mint px-4 py-2 text-sm font-bold text-gray-800"
                 >
                   이동
