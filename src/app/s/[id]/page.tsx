@@ -41,7 +41,11 @@ export default function StudentPage() {
     if (!tenantId) return;
     fetch(`/api/schedule?tenantId=${tenantId}`)
       .then((r) => r.json())
-      .then(setSchedules);
+      .then((data) => {
+        if (Array.isArray(data)) setSchedules(data);
+        else setSchedules([]);
+      })
+      .catch(() => setSchedules([]));
   }, [tenantId]);
 
   const allFields = useMemo(() => {
@@ -121,7 +125,7 @@ export default function StudentPage() {
       }
       setMessage({ type: "ok", text: "신청되었어요!" });
       const updated = await fetch(`/api/schedule?tenantId=${tenantId}`).then((r) => r.json());
-      setSchedules(updated);
+      setSchedules(Array.isArray(updated) ? updated : schedules);
     } catch {
       setMessage({ type: "err", text: "네트워크 오류가 났어요." });
     } finally {
@@ -132,9 +136,9 @@ export default function StudentPage() {
   if (!tenantId) return null;
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-pastel-cream via-pastel-sky/20 to-pastel-mint/20">
+    <main className="min-h-screen bg-gradient-to-br from-pastel-cream via-pastel-sky/20 to-pastel-mint/20 relative">
+      <p className="absolute top-3 right-4 text-xs text-gray-400 z-10">Designed by Deulssam</p>
       <div className="max-w-2xl mx-auto p-4 pb-12">
-        <p className="text-center text-xs text-gray-400 py-2">Designed by Deulssam</p>
         <header className="text-center py-6">
           <h1 className="text-2xl font-bold text-gray-800 rounded-3xl">예약 신청</h1>
           <p className="text-gray-600 text-sm mt-1">아래 항목을 모두 입력한 뒤 원하는 일정을 눌러 신청하세요.</p>

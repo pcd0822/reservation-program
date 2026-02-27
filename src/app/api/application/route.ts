@@ -132,7 +132,21 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, id: scheduleItemId + "_" + Date.now() });
   } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    const err = e as { message?: string };
+    const msg = String(err?.message ?? e);
+    console.error("[POST /api/application]", e);
+    if (msg.includes("403") || msg.includes("PERMISSION_DENIED") || msg.includes("Forbidden")) {
+      return NextResponse.json(
+        { error: "연결한 구글 시트에 저장할 권한이 없어요. 시트를 서비스 계정 이메일(앱 첫 화면·시트 연결 탭에 표시)에 [편집자]로 공유했는지 확인해 주세요." },
+        { status: 500 }
+      );
+    }
+    if (msg.includes("404") || msg.includes("NOT_FOUND")) {
+      return NextResponse.json({ error: "연결한 시트를 찾을 수 없어요. 시트 연결 탭에서 다시 연결해 보세요." }, { status: 500 });
+    }
+    return NextResponse.json(
+      { error: "시트에 저장하지 못했어요. 시트 연결·공유 설정을 확인한 뒤 다시 시도해 주세요." },
+      { status: 500 }
+    );
   }
 }

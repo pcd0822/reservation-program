@@ -25,7 +25,11 @@ export function TabScheduleManage({ tenantId }: Props) {
     fetch(`/api/schedule?tenantId=${tenantId}`)
       .then((r) => r.json())
       .then((data) => {
-        setList(data);
+        setList(Array.isArray(data) ? data : []);
+        setLoading(false);
+      })
+      .catch(() => {
+        setList([]);
         setLoading(false);
       });
   }, [tenantId]);
