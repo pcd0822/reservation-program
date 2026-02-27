@@ -1,13 +1,18 @@
-# 행사·청소·당번 예약 프로그램
+# 일정 예약 프로그램
 
-학교에서 사용할 수 있는 **행사, 청소, 당번 예약** 웹 앱입니다.  
-학생들이 날짜/시간을 선택해 신청하고, 관리자는 **구글 스프레드시트**로 신청 내역을 관리할 수 있습니다.
+학교에서 사용할 수 있는 **행사, 청소, 당번** 등 일정 예약 웹 앱입니다.  
+학생들이 날짜/시간을 선택해 신청하고, **사용자가 연결한 구글 스프레드시트**에 일정·신청 데이터가 모두 저장됩니다. (별도 DB 없음)
+
+## 특징
+
+- **사용자 시트 = DB**: 각 사용자가 연결한 구글 시트 한 개에 일정·신청이 모두 저장됩니다.
+- **등록 시트 1개**: 앱 배포자가 만든 “등록용” 시트 하나만 있으면, 여러 사용자가 각자 자기 시트를 연결해 사용할 수 있습니다.
 
 ## 기능
 
 1. **관리자 페이지**  
    - 구글 스프레드시트 **공유 링크**로 연결 (시트 공유 링크 붙여넣기)
-   - 연결한 시트에 신청 데이터 자동 저장 (연결 시 시트를 서비스 계정 이메일과 **편집자**로 공유 필요)
+   - 연결한 시트에 일정·신청 데이터 자동 저장 (시트를 서비스 계정 이메일과 **편집자**로 공유 필요)
 
 2. **신청 단위**  
    - **주차(week)** / **날짜(day)** / **시간대(time)** 중 선택  
@@ -15,24 +20,24 @@
 
 3. **일정별 설정**  
    - 일정당 최대 신청 인원  
+   - 예약 신청 마감일시 (선택)  
    - 설문처럼 **입력 항목** 추가 (글자, 숫자, 선택)
 
 4. **같은 일정에 여러 역할/수업**  
-   - 같은 날짜·시간에 제목만 다른 일정을 여러 개 생성 가능 (안내 문구 표시)
+   - 같은 날짜·시간에 제목만 다른 일정을 여러 개 생성 가능
 
 5. **신청 링크 & QR**  
-   - 일정 생성 후 **신청 링크** 생성, **클립보드 복사**  
-   - **QR 코드** 이미지 저장
+   - 일정 생성 후 신청 링크 생성, 클립보드 복사, QR 코드 이미지 저장
 
 6. **신청내역 관리**  
    - 일정별 신청 인원 표시, 마감 시 색상 구분  
-   - 일정 클릭 시 신청자 목록 확인
+   - 일정 클릭 시 신청자 목록 테이블 조회 및 엑셀/PDF/이미지 다운로드
 
 7. **학생 신청**  
-   - 관리자가 만든 입력 항목을 모두 입력한 뒤, 원하는 일정을 눌러 신청
+   - 관리자가 만든 입력 항목을 모두 입력한 뒤, 원하는 일정을 눌러 신청 (마감 일정 시각 표시)
 
 8. **일정 관리 탭**  
-   - 만든 일정 목록 관리, 구글 시트에는 일정별 신청 데이터 누적 저장
+   - 만든 일정 목록 관리
 
 ## 실행 방법
 
@@ -42,47 +47,26 @@
 npm install
 ```
 
-### 2. 데이터베이스 (PostgreSQL, 필수)
+### 2. 환경 변수 (배포자만)
 
-Netlify·로컬 모두 **SQLite는 사용하지 않습니다.** 서버리스에서는 **PostgreSQL** 연결이 필요합니다.
+**등록 시트 (필수)**
 
-1. **[Neon](https://neon.tech)** (무료) 권장: 회원가입 후 **New Project** → 프로젝트 생성
-2. 대시보드에서 **Connection string** 복사 (예: `postgresql://user:pass@ep-xxx.region.aws.neon.tech/neondb?sslmode=require`)
-3. `.env` 파일에 추가:
+- 구글 스프레드시트 **한 개**를 새로 만듭니다. (이름 예: "일정예약 등록")
+- 해당 시트를 **편집자** 권한으로 **서비스 계정 이메일**에 공유합니다.
+- 시트 URL에서 **시트 ID**를 복사합니다.  
+  예: `https://docs.google.com/spreadsheets/d/여기가ID/edit` → `REGISTRY_SHEET_ID`에 `여기가ID` 입력
 
-```env
-DATABASE_URL="postgresql://USER:PASSWORD@HOST/DATABASE?sslmode=require"
-```
-
-4. 테이블 생성:
-
-```bash
-npx prisma generate
-npx prisma db push
-```
-
-### 3. 환경 변수 & 구글 설정 (역할 구분)
-
-**개발자(나)만 하는 일**
+**서비스 계정**
 
 - Google Cloud Console에서 **서비스 계정**을 만들고 **JSON 키**를 다운로드합니다.
-- 배포 환경(로컬 `.env` 또는 Netlify 환경 변수)에 **GOOGLE_SERVICE_ACCOUNT_KEY** 로 그 JSON 전체를 한 줄로 넣습니다.  
-  → 이 작업은 **한 번만** 하면 되고, **개발자만** 하면 됩니다.
-
-**다른 사람(사용자/관리자)이 하는 일**
-
-- **Google Cloud나 JSON은 건드리지 않습니다.**
-- 자신의 **구글 계정**으로 스프레드시트를 만든 뒤, 앱의 **시트 연결** 탭에서 그 시트의 **공유 링크**를 붙여넣습니다.
-- 앱에 안내된 **서비스 계정 이메일**을 해당 시트의 **편집자**로 추가하면, 그 시트에 신청 데이터가 저장됩니다.
-
-정리하면, JSON 설정은 개발자인 나만 하고, 사용자는 **자기 구글 시트만 만들고 → 편집자 권한에 서비스 계정 이메일만 추가**하면 됩니다.
+- `.env` 또는 Netlify 환경 변수에 **GOOGLE_SERVICE_ACCOUNT_KEY** 로 JSON 전체를 한 줄로 넣습니다.
 
 ```env
-# 개발자가 .env 또는 Netlify에 한 번만 설정
+REGISTRY_SHEET_ID=등록용_시트_ID
 GOOGLE_SERVICE_ACCOUNT_KEY={"type":"service_account", ...}
 ```
 
-### 4. 개발 서버
+### 3. 개발 서버
 
 ```bash
 npm run dev
@@ -90,68 +74,39 @@ npm run dev
 
 브라우저에서 `http://localhost:3000` 으로 접속합니다.
 
-## 사용 흐름
+## 사용 흐름 (사용자)
 
-1. **처음 방문** → "새 예약 공간 만들기" → 관리자 링크 / 학생 링크 확인  
-2. **관리자 링크**로 접속 → **시트 연결** 탭에서 구글 스프레드시트 **공유 링크** 붙여넣기 → 시트를 안내된 이메일로 **편집자** 공유  
-3. **일정 만들기** 탭에서 주차/날짜/시간대 선택, 일정 추가, 입력 항목·최대 인원 설정 → "일정 생성 완료" → 신청 링크 복사 & QR 저장  
-4. **학생 링크**를 학생에게 공유 → 학생이 입력 항목 작성 후 원하는 일정 클릭해 신청  
-5. **신청내역 관리** / **일정 관리** 탭에서 확인 및 관리
+1. 웹앱 접속 → **새 일정 만들기** → 관리자 페이지로 이동
+2. **시트 연결** 탭에서 **자기 구글 스프레드시트** 공유 링크 붙여넣기 → 시트를 서비스 계정 이메일에 **편집자**로 공유
+3. **일정 만들기** 탭에서 주차/날짜/시간대, 입력 항목·최대 인원·마감일시 설정 → 일정 생성 완료 → 신청 링크·QR 공유
+4. **학생**이 링크로 접속해 입력 후 일정 선택해 신청
+5. **신청내역 관리** / **일정 관리** 탭에서 확인
 
-## Netlify 배포 (GitHub 리포지터리 호스팅)
+## 사용자 시트 구조 (자동 생성)
 
-이 프로젝트는 **GitHub 리포지터리**를 **Netlify**에 연결해 호스팅하는 것을 기준으로 설정되어 있습니다.
+사용자가 연결한 시트에는 다음이 저장됩니다.
 
-### 1. GitHub에 코드 푸시
+- **첫 시트(Sheet1)**: 신청 내역 (일정ID, 일정명, 날짜, 시간, 신청일시 + 사용자 입력 항목)
+- **일정 시트**: 일정 목록 (Id, Title, Type, DateStart, DateEnd, TimeLabel, MaxCapacity, ApplyUntil, CustomFields)
 
-```bash
-git remote add origin https://github.com/사용자명/리포지터리명.git
-git add .
-git commit -m "Initial commit"
-git push -u origin main
-```
+일정 시트는 앱이 자동으로 추가합니다.
 
-### 2. Netlify에서 사이트 생성
+## Netlify 배포
 
-1. [Netlify](https://www.netlify.com/) 로그인 후 **Add new site** → **Import an existing project**
-2. **GitHub** 연결 후 위에서 푸시한 **리포지터리** 선택
-3. 빌드 설정은 `netlify.toml`이 적용됩니다. 필요 시 다음만 확인:
-   - **Build command:** `npm run build`
-   - **Node version:** 18 (Netlify 대시보드에서 **Environment variables**에 `NODE_VERSION = 18` 설정 가능)
+1. GitHub에 코드 푸시 후 Netlify에서 리포지터리 연결
+2. **Environment variables** 에 다음 설정:
+   - `REGISTRY_SHEET_ID`: 등록용 구글 시트 ID
+   - `GOOGLE_SERVICE_ACCOUNT_KEY`: 서비스 계정 JSON (한 줄)
+3. 배포 후 사이트 URL로 접속해 사용
 
-### 3. 환경 변수 설정 (필수)
-
-Netlify 대시보드 → **Site settings** → **Environment variables** → **Add a variable**:
-
-| 변수명 | 값 | 비고 |
-|--------|-----|------|
-| `DATABASE_URL` | Neon 등 PostgreSQL 연결 문자열 | **없으면 "DB 연결 확인" 오류 발생** |
-| `GOOGLE_SERVICE_ACCOUNT_KEY` | 서비스 계정 JSON 전체 (한 줄) | 구글 시트 연동 시 필수 |
-
-- **DATABASE_URL**: [Neon](https://neon.tech)에서 프로젝트 생성 후 Connection string 복사해 넣기.
-- 둘 다 시크릿이므로 **Encrypted**로 저장합니다.
-
-배포 **전**에 로컬에서 한 번 실행해 두세요 (Neon에 테이블 생성):
-
-```bash
-# .env에 DATABASE_URL 넣은 뒤
-npx prisma db push
-```
-
-### 4. 배포 후
-
-- Netlify가 배포할 때마다 **자동 빌드** 후 배포됩니다.
-- **관리자/학생 링크**는 `https://사이트주소.netlify.app/`, `https://사이트주소.netlify.app/a/xxx`, `https://사이트주소.netlify.app/s/xxx` 형태로 사용하면 됩니다.
-
----
+**DATABASE_URL·Neon·Prisma는 사용하지 않습니다.** 사용자 데이터는 모두 사용자가 연결한 구글 시트에만 저장됩니다.
 
 ## 기술 스택
 
 - Next.js 14 (App Router), React, TypeScript  
-- Tailwind CSS (파스텔·둥글고 귀여운 UI, 반응형)  
-- Prisma + PostgreSQL (Neon 등, Netlify·로컬 공통)  
+- Tailwind CSS  
 - Google Sheets API (서비스 계정)  
-- QR 코드 생성 (qrcode)
+- QR 코드 (qrcode), 엑셀/PDF/이미지 내보내기 (xlsx, jspdf, html2canvas)
 
 ## 라이선스
 

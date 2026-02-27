@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { generateToken } from "@/lib/utils";
-import { extractSheetIdFromUrl } from "@/lib/sheets";
+import {
+  extractSheetIdFromUrl,
+  registryAppendTenant,
+  registryUpdateSheetId,
+  registryGetTenant,
+} from "@/lib/sheets";
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,13 +17,12 @@ export async function POST(request: NextRequest) {
     };
 
     if (action === "create") {
-      const tenant = await prisma.tenant.create({
-        data: { id: generateToken() },
-      });
+      const tenantId = generateToken();
+      await registryAppendTenant(tenantId);
       return NextResponse.json({
-        id: tenant.id,
-        adminUrl: `/a/${tenant.id}`,
-        studentUrl: `/s/${tenant.id}`,
+        id: tenantId,
+        adminUrl: `/a/${tenantId}`,
+        studentUrl: `/s/${tenantId}`,
       });
     }
 
@@ -31,17 +34,17 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      await prisma.tenant.update({
-        where: { id },
-        data: { sheetId },
-      });
+      await registryUpdateSheetId(id, sheetId);
       return NextResponse.json({ success: true, sheetId });
     }
 
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   } catch (e) {
     console.error("[POST /api/tenant]", e);
-    return NextResponse.json({ error: "서버 오류가 났어요. DB 연결을 확인해 주세요." }, { status: 500 });
+    return NextResponse.json(
+      { error: "서버 오류가 났어요. REGISTRY_SHEET_ID와 구글 시트 연동을 확인해 주세요." },
+      { status: 500 }
+    );
   }
 }
 
@@ -51,16 +54,16 @@ export async function GET(request: NextRequest) {
     if (!id) {
       return NextResponse.json({ error: "id required" }, { status: 400 });
     }
-    const tenant = await prisma.tenant.findUnique({
-      where: { id },
-      select: { id: true, sheetId: true, createdAt: true },
-    });
+    const tenant = await registryGetTenant(id);
     if (!tenant) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    return NextResponse.json(tenant);
+    return NextResponse.json({ id, sheetId: tenant.sheetId });
   } catch (e) {
     console.error("[GET /api/tenant]", e);
-    return NextResponse.json({ error: "서버 오류가 났어요. DB 연결을 확인해 주세요." }, { status: 500 });
+    return NextResponse.json(
+      { error: "서버 오류가 났어요. REGISTRY_SHEET_ID를 확인해 주세요." },
+      { status: 500 }
+    );
   }
 }

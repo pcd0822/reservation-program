@@ -32,7 +32,7 @@ export function TabScheduleManage({ tenantId }: Props) {
 
   const handleDelete = async (id: string, title: string) => {
     if (!confirm(`"${title}" 일정을 삭제할까요? 이미 신청된 내역은 함께 삭제됩니다.`)) return;
-    await fetch(`/api/schedule?id=${id}`, { method: "DELETE" });
+    await fetch(`/api/schedule?id=${id}&tenantId=${tenantId}`, { method: "DELETE" });
     setList((p) => p.filter((s) => s.id !== id));
   };
 
