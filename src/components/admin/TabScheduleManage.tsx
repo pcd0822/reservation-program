@@ -52,6 +52,10 @@ export function TabScheduleManage({ tenantId }: Props) {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const [pendingCalendarDate, setPendingCalendarDate] = useState<string | null>(null);
+  const [dtPickerFor, setDtPickerFor] = useState<"from" | "until" | null>(null);
+  const [dtPickerMonth, setDtPickerMonth] = useState(() => new Date());
+  const [dtPickerDate, setDtPickerDate] = useState<string | null>(null);
+  const [dtPickerTime, setDtPickerTime] = useState("09:00");
 
   const load = () => {
     fetch(`/api/schedule?tenantId=${tenantId}`)
@@ -183,6 +187,37 @@ export function TabScheduleManage({ tenantId }: Props) {
     });
     setPendingCalendarDate(null);
     setCalendarOpen(false);
+  };
+
+  const dtPickerGrid = useMemo(() => {
+    const start = startOfWeek(startOfMonth(dtPickerMonth), { weekStartsOn: 0 });
+    const end = endOfWeek(endOfMonth(dtPickerMonth), { weekStartsOn: 0 });
+    return eachDayOfInterval({ start, end });
+  }, [dtPickerMonth]);
+
+  const openEditDtPicker = (which: "from" | "until") => {
+    if (!editForm) return;
+    const raw = which === "from" ? editForm.applyFrom : editForm.applyUntil;
+    if (raw) {
+      const d = raw.slice(0, 10);
+      const t = raw.slice(11, 16) || "09:00";
+      setDtPickerDate(d);
+      setDtPickerTime(t);
+      setDtPickerMonth(d ? new Date(d) : new Date());
+    } else {
+      const today = format(new Date(), "yyyy-MM-dd");
+      setDtPickerDate(today);
+      setDtPickerTime("09:00");
+      setDtPickerMonth(new Date());
+    }
+    setDtPickerFor(which);
+  };
+
+  const applyEditDtPicker = () => {
+    if (!editForm || !dtPickerFor || !dtPickerDate) return;
+    const value = `${dtPickerDate}T${dtPickerTime}`;
+    setEditForm({ ...editForm, [dtPickerFor === "from" ? "applyFrom" : "applyUntil"]: value });
+    setDtPickerFor(null);
   };
 
   const handleSaveEdit = async () => {
@@ -448,23 +483,70 @@ export function TabScheduleManage({ tenantId }: Props) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">신청 가능 시작일시</label>
-                <input
-                  type="datetime-local"
-                  value={editForm.applyFrom}
-                  onChange={(e) => setEditForm({ ...editForm, applyFrom: e.target.value })}
-                  className="w-full rounded-2xl border-2 border-pastel-lavender px-3 py-2"
-                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="flex-1 min-w-0 rounded-2xl border-2 border-pastel-lavender bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                    {editForm.applyFrom ? format(new Date(editForm.applyFrom), "yyyy-MM-dd HH:mm", { locale: ko }) : "미설정"}
+                  </span>
+                  <button type="button" onClick={() => openEditDtPicker("from")} className="btn-bounce rounded-xl bg-pastel-lavender/80 px-3 py-2 text-sm font-medium text-gray-800">
+                    날짜·시간 선택
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">신청 마감일시</label>
-                <input
-                  type="datetime-local"
-                  value={editForm.applyUntil}
-                  onChange={(e) => setEditForm({ ...editForm, applyUntil: e.target.value })}
-                  className="w-full rounded-2xl border-2 border-pastel-lavender px-3 py-2"
-                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="flex-1 min-w-0 rounded-2xl border-2 border-pastel-lavender bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                    {editForm.applyUntil ? format(new Date(editForm.applyUntil), "yyyy-MM-dd HH:mm", { locale: ko }) : "미설정"}
+                  </span>
+                  <button type="button" onClick={() => openEditDtPicker("until")} className="btn-bounce rounded-xl bg-pastel-lavender/80 px-3 py-2 text-sm font-medium text-gray-800">
+                    날짜·시간 선택
+                  </button>
+                </div>
               </div>
             </div>
+            {dtPickerFor && (
+              <div className="p-4 rounded-2xl border-2 border-pastel-lavender bg-white/95 space-y-3">
+                <p className="text-sm font-medium text-gray-700">
+                  {dtPickerFor === "from" ? "신청 가능 시작일시" : "신청 마감일시"} — 날짜와 시간을 고른 뒤 &#39;선택&#39;을 누르세요.
+                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <button type="button" onClick={() => setDtPickerMonth((m) => subMonths(m, 1))} className="btn-bounce rounded-lg px-2 py-1 text-sm text-gray-600 hover:bg-gray-100">이전</button>
+                  <span className="text-sm font-bold text-gray-800">{format(dtPickerMonth, "yyyy년 M월", { locale: ko })}</span>
+                  <button type="button" onClick={() => setDtPickerMonth((m) => addMonths(m, 1))} className="btn-bounce rounded-lg px-2 py-1 text-sm text-gray-600 hover:bg-gray-100">다음</button>
+                </div>
+                <div className="grid grid-cols-7 gap-0.5 text-center">
+                  {["일", "월", "화", "수", "목", "금", "토"].map((d) => (
+                    <div key={d} className="py-1 text-xs font-semibold text-gray-500">{d}</div>
+                  ))}
+                  {dtPickerGrid.map((day) => {
+                    const dateStr = format(day, "yyyy-MM-dd");
+                    const inMonth = isSameMonth(day, dtPickerMonth);
+                    const isPending = dtPickerDate === dateStr;
+                    return (
+                      <button
+                        key={dateStr}
+                        type="button"
+                        onClick={() => setDtPickerDate(dateStr)}
+                        className={`rounded-lg py-1.5 text-sm ${inMonth ? (isPending ? "bg-pastel-pink text-gray-800 font-bold" : "hover:bg-pastel-sky/40 text-gray-800") : "text-gray-300"}`}
+                      >
+                        {format(day, "d")}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="text-sm text-gray-700">시간</label>
+                  <input type="time" value={dtPickerTime} onChange={(e) => setDtPickerTime(e.target.value)} className="rounded-xl border-2 border-pastel-lavender px-3 py-2 text-sm" />
+                  {dtPickerDate && (
+                    <>
+                      <span className="text-sm text-gray-600">{format(new Date(dtPickerDate), "M/d (EEE)", { locale: ko })} {dtPickerTime}</span>
+                      <button type="button" onClick={applyEditDtPicker} className="btn-bounce rounded-xl bg-pastel-pink px-4 py-2 text-sm font-medium text-gray-800">선택</button>
+                    </>
+                  )}
+                  <button type="button" onClick={() => setDtPickerFor(null)} className="rounded-xl bg-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-300">취소</button>
+                </div>
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">최대 인원</label>
               <input

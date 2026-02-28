@@ -33,6 +33,10 @@ export function TabSchedules({ tenantId }: Props) {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const [pendingCalendarDate, setPendingCalendarDate] = useState<string | null>(null);
+  const [dtPickerFor, setDtPickerFor] = useState<"from" | "until" | null>(null);
+  const [dtPickerMonth, setDtPickerMonth] = useState(() => new Date());
+  const [dtPickerDate, setDtPickerDate] = useState<string | null>(null);
+  const [dtPickerTime, setDtPickerTime] = useState("09:00");
 
   const addSameSlot = () => {
     setSameSlotTitles((p) => [...p, ""]);
@@ -80,6 +84,37 @@ export function TabSchedules({ tenantId }: Props) {
     setSlots((p) => [...p, { date: pendingCalendarDate, timeLabel: type === "time" ? (last?.timeLabel ?? "") : "" }]);
     setPendingCalendarDate(null);
     setCalendarOpen(false);
+  };
+
+  const dtPickerGrid = useMemo(() => {
+    const start = startOfWeek(startOfMonth(dtPickerMonth), { weekStartsOn: 0 });
+    const end = endOfWeek(endOfMonth(dtPickerMonth), { weekStartsOn: 0 });
+    return eachDayOfInterval({ start, end });
+  }, [dtPickerMonth]);
+
+  const openDtPicker = (which: "from" | "until") => {
+    const raw = which === "from" ? applyFrom : applyUntil;
+    if (raw) {
+      const d = raw.slice(0, 10);
+      const t = raw.slice(11, 16) || "09:00";
+      setDtPickerDate(d);
+      setDtPickerTime(t);
+      setDtPickerMonth(d ? new Date(d) : new Date());
+    } else {
+      const today = format(new Date(), "yyyy-MM-dd");
+      setDtPickerDate(today);
+      setDtPickerTime("09:00");
+      setDtPickerMonth(new Date());
+    }
+    setDtPickerFor(which);
+  };
+
+  const applyDtPicker = () => {
+    if (!dtPickerFor || !dtPickerDate) return;
+    const value = `${dtPickerDate}T${dtPickerTime}`;
+    if (dtPickerFor === "from") setApplyFrom(value);
+    else setApplyUntil(value);
+    setDtPickerFor(null);
   };
 
   const handleCreate = async () => {
@@ -410,25 +445,72 @@ export function TabSchedules({ tenantId }: Props) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">예약 신청 가능 시작일시 (선택)</label>
-          <input
-            type="datetime-local"
-            value={applyFrom}
-            onChange={(e) => setApplyFrom(e.target.value)}
-            className="w-full rounded-2xl border-2 border-pastel-lavender px-3 py-2"
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="flex-1 min-w-0 rounded-2xl border-2 border-pastel-lavender bg-gray-50 px-3 py-2 text-sm text-gray-700">
+              {applyFrom ? format(new Date(applyFrom), "yyyy-MM-dd HH:mm", { locale: ko }) : "미설정"}
+            </span>
+            <button type="button" onClick={() => openDtPicker("from")} className="btn-bounce rounded-xl bg-pastel-lavender/80 px-3 py-2 text-sm font-medium text-gray-800">
+              날짜·시간 선택
+            </button>
+          </div>
           <p className="text-xs text-gray-500 mt-1">비워두면 바로 신청 가능해요.</p>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">예약 신청 마감일시 (선택)</label>
-          <input
-            type="datetime-local"
-            value={applyUntil}
-            onChange={(e) => setApplyUntil(e.target.value)}
-            className="w-full rounded-2xl border-2 border-pastel-lavender px-3 py-2"
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="flex-1 min-w-0 rounded-2xl border-2 border-pastel-lavender bg-gray-50 px-3 py-2 text-sm text-gray-700">
+              {applyUntil ? format(new Date(applyUntil), "yyyy-MM-dd HH:mm", { locale: ko }) : "미설정"}
+            </span>
+            <button type="button" onClick={() => openDtPicker("until")} className="btn-bounce rounded-xl bg-pastel-lavender/80 px-3 py-2 text-sm font-medium text-gray-800">
+              날짜·시간 선택
+            </button>
+          </div>
           <p className="text-xs text-gray-500 mt-1">비워두면 마감 시간 없이 인원만 채워질 때까지 신청받아요.</p>
         </div>
       </div>
+      {dtPickerFor && (
+        <div className="p-4 rounded-2xl border-2 border-pastel-lavender bg-white/95 space-y-3">
+          <p className="text-sm font-medium text-gray-700">
+            {dtPickerFor === "from" ? "예약 신청 가능 시작일시" : "예약 신청 마감일시"} — 날짜와 시간을 고른 뒤 &#39;선택&#39;을 누르세요.
+          </p>
+          <div className="flex items-center justify-between gap-2">
+            <button type="button" onClick={() => setDtPickerMonth((m) => subMonths(m, 1))} className="btn-bounce rounded-lg px-2 py-1 text-sm text-gray-600 hover:bg-gray-100">이전</button>
+            <span className="text-sm font-bold text-gray-800">{format(dtPickerMonth, "yyyy년 M월", { locale: ko })}</span>
+            <button type="button" onClick={() => setDtPickerMonth((m) => addMonths(m, 1))} className="btn-bounce rounded-lg px-2 py-1 text-sm text-gray-600 hover:bg-gray-100">다음</button>
+          </div>
+          <div className="grid grid-cols-7 gap-0.5 text-center">
+            {["일", "월", "화", "수", "목", "금", "토"].map((d) => (
+              <div key={d} className="py-1 text-xs font-semibold text-gray-500">{d}</div>
+            ))}
+            {dtPickerGrid.map((day) => {
+              const dateStr = format(day, "yyyy-MM-dd");
+              const inMonth = isSameMonth(day, dtPickerMonth);
+              const isPending = dtPickerDate === dateStr;
+              return (
+                <button
+                  key={dateStr}
+                  type="button"
+                  onClick={() => setDtPickerDate(dateStr)}
+                  className={`rounded-lg py-1.5 text-sm ${inMonth ? (isPending ? "bg-pastel-pink text-gray-800 font-bold" : "hover:bg-pastel-sky/40 text-gray-800") : "text-gray-300"}`}
+                >
+                  {format(day, "d")}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-sm text-gray-700">시간</label>
+            <input type="time" value={dtPickerTime} onChange={(e) => setDtPickerTime(e.target.value)} className="rounded-xl border-2 border-pastel-lavender px-3 py-2 text-sm" />
+            {dtPickerDate && (
+              <>
+                <span className="text-sm text-gray-600">{format(new Date(dtPickerDate), "M/d (EEE)", { locale: ko })} {dtPickerTime}</span>
+                <button type="button" onClick={applyDtPicker} className="btn-bounce rounded-xl bg-pastel-pink px-4 py-2 text-sm font-medium text-gray-800">선택</button>
+              </>
+            )}
+            <button type="button" onClick={() => setDtPickerFor(null)} className="rounded-xl bg-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-300">취소</button>
+          </div>
+        </div>
+      )}
 
       <CustomFieldsEditor fields={customFields} onChange={setCustomFields} />
 
