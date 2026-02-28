@@ -303,7 +303,7 @@ export function TabApplications({ tenantId }: Props) {
       </p>
 
       <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-        <div className="relative w-full sm:w-auto sm:min-w-[200px] sm:max-w-xs order-1 sm:order-1">
+        <div className="relative w-full sm:w-auto sm:min-w-[200px] sm:max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
@@ -313,7 +313,8 @@ export function TabApplications({ tenantId }: Props) {
             className="w-full pl-9 pr-4 py-2 rounded-xl border-2 border-pastel-lavender text-sm text-gray-800 placeholder-gray-400 focus:border-pastel-pink focus:outline-none"
           />
         </div>
-        <div ref={filterRef} className="relative order-2">
+        <div className="flex items-center gap-2 sm:gap-3 ml-auto">
+          <div ref={filterRef} className="relative">
           <button
             type="button"
             onClick={() => setFilterOpen((o) => !o)}
@@ -333,8 +334,8 @@ export function TabApplications({ tenantId }: Props) {
               <button type="button" onClick={() => { setStatusFilter("closed"); setFilterOpen(false); }} className={`w-full text-left px-3 py-2 text-sm ${statusFilter === "closed" ? "bg-red-100 font-medium" : "hover:bg-gray-100"}`}>마감</button>
             </div>
           )}
-        </div>
-        <div className="flex items-center gap-1 rounded-xl border-2 border-pastel-lavender p-1 bg-gray-50 order-3">
+          </div>
+          <div className="flex items-center gap-1 rounded-xl border-2 border-pastel-lavender p-1 bg-gray-50">
           <button
             type="button"
             onClick={() => setViewMode("card")}
@@ -351,6 +352,7 @@ export function TabApplications({ tenantId }: Props) {
             <CalendarDays className="w-4 h-4" />
             캘린더
           </button>
+          </div>
         </div>
       </div>
 
