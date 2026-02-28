@@ -18,6 +18,7 @@ type ScheduleItem = {
   timeLabel: string | null;
   maxCapacity: number;
   applyUntil: string | null;
+  applyFrom?: string | null;
   customFields: string;
   slots?: SlotOption[];
   _count?: { applications: number };
@@ -64,7 +65,10 @@ export default function StudentPage() {
     return s.slotCounts?.[slotKey(slot.date, slot.timeLabel)] ?? 0;
   };
   const now = new Date();
+  const isSlotNotYetOpen = (s: ScheduleItem) =>
+    s.applyFrom != null && s.applyFrom !== "" && now < new Date(s.applyFrom);
   const isSlotClosed = (s: ScheduleItem, slot: SlotOption) => {
+    if (isSlotNotYetOpen(s)) return { closed: true, reason: "아직 신청 가능 시간이 아님" as const };
     const count = getSlotCount(s, slot);
     if (count >= s.maxCapacity) return { closed: true, reason: "인원 마감" as const };
     if (s.applyUntil && now > new Date(s.applyUntil)) return { closed: true, reason: "신청 기간 마감" as const };
@@ -168,7 +172,8 @@ export default function StudentPage() {
                     type="text"
                     value={formData[f.id] ?? ""}
                     onChange={(e) => setFormData((p) => ({ ...p, [f.id]: e.target.value }))}
-                    className="w-full rounded-2xl border-2 border-pastel-lavender px-4 py-2 focus:border-pastel-pink focus:outline-none"
+                    placeholder={`예: ${f.label} 입력`}
+                    className="w-full rounded-2xl border-2 border-pastel-lavender px-4 py-2 placeholder-gray-400 focus:border-pastel-pink focus:outline-none focus:placeholder:opacity-0"
                   />
                 )}
                 {f.type === "number" && (
@@ -176,7 +181,8 @@ export default function StudentPage() {
                     type="number"
                     value={formData[f.id] ?? ""}
                     onChange={(e) => setFormData((p) => ({ ...p, [f.id]: e.target.value }))}
-                    className="w-full rounded-2xl border-2 border-pastel-lavender px-4 py-2 focus:border-pastel-pink focus:outline-none"
+                    placeholder="숫자 입력"
+                    className="w-full rounded-2xl border-2 border-pastel-lavender px-4 py-2 placeholder-gray-400 focus:border-pastel-pink focus:outline-none focus:placeholder:opacity-0"
                   />
                 )}
                 {f.type === "select" && (

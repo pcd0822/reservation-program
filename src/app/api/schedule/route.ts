@@ -3,6 +3,7 @@ import { registryGetTenant } from "@/lib/sheets";
 import {
   sheetReadSchedules,
   sheetAppendSchedule,
+  sheetUpdateSchedule,
   sheetDeleteSchedule,
   sheetReadApplications,
   type ScheduleSlot,
@@ -61,6 +62,7 @@ export async function POST(request: NextRequest) {
       timeLabel,
       maxCapacity,
       applyUntil,
+      applyFrom,
       customFields,
       slots: slotsInput,
     } = body as {
@@ -72,6 +74,7 @@ export async function POST(request: NextRequest) {
       timeLabel?: string;
       maxCapacity: number;
       applyUntil?: string | null;
+      applyFrom?: string | null;
       customFields: string;
       slots?: { date: string; timeLabel?: string }[];
     };
@@ -109,6 +112,7 @@ export async function POST(request: NextRequest) {
       timeLabel: timeLabel ?? null,
       maxCapacity: Math.max(1, Number(maxCapacity) || 1),
       applyUntil: applyUntil ?? null,
+      applyFrom: applyFrom ?? null,
       customFields: typeof customFields === "string" ? customFields : JSON.stringify(customFields ?? []),
       slots: slots.length > 0 ? slots : undefined,
     });
@@ -123,9 +127,84 @@ export async function POST(request: NextRequest) {
       timeLabel: timeLabel ?? null,
       maxCapacity: Math.max(1, Number(maxCapacity) || 1),
       applyUntil: applyUntil ?? null,
+      applyFrom: applyFrom ?? null,
       customFields: typeof customFields === "string" ? customFields : JSON.stringify(customFields ?? []),
       slots: slots.length > 0 ? slots : undefined,
     });
+  } catch (e) {
+    console.error(e);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const {
+      id,
+      tenantId,
+      title,
+      type,
+      dateStart,
+      dateEnd,
+      timeLabel,
+      maxCapacity,
+      applyUntil,
+      applyFrom,
+      customFields,
+      slots: slotsInput,
+    } = body as {
+      id: string;
+      tenantId: string;
+      title: string;
+      type: "week" | "day" | "time";
+      dateStart: string;
+      dateEnd: string;
+      timeLabel?: string | null;
+      maxCapacity: number;
+      applyUntil?: string | null;
+      applyFrom?: string | null;
+      customFields: string;
+      slots?: { date: string; timeLabel?: string }[];
+    };
+
+    if (!id || !tenantId || !title || !type || !dateStart || !dateEnd) {
+      return NextResponse.json(
+        { error: "id, tenantId, title, type, dateStart, dateEnd required" },
+        { status: 400 }
+      );
+    }
+
+    const tenant = await registryGetTenant(tenantId);
+    if (!tenant?.sheetId) {
+      return NextResponse.json(
+        { error: "시트가 연결되지 않았습니다." },
+        { status: 400 }
+      );
+    }
+
+    const slots: ScheduleSlot[] =
+      Array.isArray(slotsInput) && slotsInput.length > 0
+        ? slotsInput.map((s) => ({
+            date: String(s.date ?? "").slice(0, 10),
+            timeLabel: String(s.timeLabel ?? ""),
+          })).filter((s) => s.date)
+        : [];
+
+    await sheetUpdateSchedule(tenant.sheetId, id, {
+      title: title.trim(),
+      type,
+      dateStart: String(dateStart),
+      dateEnd: String(dateEnd),
+      timeLabel: timeLabel ?? null,
+      maxCapacity: Math.max(1, Number(maxCapacity) || 1),
+      applyUntil: applyUntil ?? null,
+      applyFrom: applyFrom ?? null,
+      customFields: typeof customFields === "string" ? customFields : JSON.stringify(customFields ?? []),
+      slots: slots.length > 0 ? slots : undefined,
+    });
+
+    return NextResponse.json({ success: true });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: "Server error" }, { status: 500 });

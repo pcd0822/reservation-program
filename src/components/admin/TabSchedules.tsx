@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { CalendarPlus } from "lucide-react";
 import { CustomFieldsEditor } from "./CustomFieldsEditor";
 import type { CustomField } from "@/lib/utils";
 import { startOfWeek, endOfWeek, parseISO } from "date-fns";
@@ -20,6 +21,7 @@ export function TabSchedules({ tenantId }: Props) {
   const [timeLabel, setTimeLabel] = useState("");
   const [slots, setSlots] = useState<SlotRow[]>([{ date: "", timeLabel: "" }]);
   const [maxCapacity, setMaxCapacity] = useState(5);
+  const [applyFrom, setApplyFrom] = useState("");
   const [applyUntil, setApplyUntil] = useState("");
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [sameSlotTitles, setSameSlotTitles] = useState<string[]>([""]);
@@ -95,6 +97,7 @@ export function TabSchedules({ tenantId }: Props) {
             dateEnd: dateE.toISOString(),
             timeLabel: type === "time" ? timeLabel || null : null,
             maxCapacity,
+            applyFrom: applyFrom ? new Date(applyFrom).toISOString() : null,
             applyUntil: applyUntil ? new Date(applyUntil).toISOString() : null,
             customFields: JSON.stringify(customFields),
             slots: bodySlots,
@@ -279,9 +282,10 @@ export function TabSchedules({ tenantId }: Props) {
           <button
             type="button"
             onClick={addSlot}
-            className="btn-bounce rounded-xl bg-pastel-sky/80 px-3 py-1.5 text-sm font-medium"
+            className="btn-bounce rounded-xl bg-pastel-sky/80 px-3 py-2 text-sm font-medium inline-flex items-center gap-2 text-gray-800 hover:bg-pastel-sky"
           >
-            + 일시 추가
+            <CalendarPlus className="w-5 h-5 text-pastel-pink shrink-0" strokeWidth={2} />
+            일시 추가
           </button>
         </div>
       )}
@@ -339,15 +343,27 @@ export function TabSchedules({ tenantId }: Props) {
         />
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">예약 신청 마감일시 (선택)</label>
-        <input
-          type="datetime-local"
-          value={applyUntil}
-          onChange={(e) => setApplyUntil(e.target.value)}
-          className="w-full rounded-2xl border-2 border-pastel-lavender px-3 py-2"
-        />
-        <p className="text-xs text-gray-500 mt-1">비워두면 마감 시간 없이 인원만 채워질 때까지 신청받아요.</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">예약 신청 가능 시작일시 (선택)</label>
+          <input
+            type="datetime-local"
+            value={applyFrom}
+            onChange={(e) => setApplyFrom(e.target.value)}
+            className="w-full rounded-2xl border-2 border-pastel-lavender px-3 py-2"
+          />
+          <p className="text-xs text-gray-500 mt-1">비워두면 바로 신청 가능해요.</p>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">예약 신청 마감일시 (선택)</label>
+          <input
+            type="datetime-local"
+            value={applyUntil}
+            onChange={(e) => setApplyUntil(e.target.value)}
+            className="w-full rounded-2xl border-2 border-pastel-lavender px-3 py-2"
+          />
+          <p className="text-xs text-gray-500 mt-1">비워두면 마감 시간 없이 인원만 채워질 때까지 신청받아요.</p>
+        </div>
       </div>
 
       <CustomFieldsEditor fields={customFields} onChange={setCustomFields} />

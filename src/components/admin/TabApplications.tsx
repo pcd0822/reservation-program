@@ -8,6 +8,8 @@ import { FileSpreadsheet, FileImage, FileText, Search } from "lucide-react";
 
 type StatusFilter = "all" | "in_progress" | "closed" | "upcoming";
 
+type ScheduleSlot = { date: string; timeLabel?: string };
+
 type ScheduleItem = {
   id: string;
   title: string;
@@ -17,7 +19,9 @@ type ScheduleItem = {
   timeLabel: string | null;
   maxCapacity: number;
   applyUntil: string | null;
+  applyFrom?: string | null;
   customFields: string;
+  slots?: ScheduleSlot[];
   _count?: { applications: number };
   slotCounts?: Record<string, number>;
 };
@@ -73,15 +77,42 @@ export function TabApplications({ tenantId }: Props) {
     return 0;
   };
 
+  const now = new Date();
   const isClosed = (s: ScheduleItem) => {
     const count = getScheduleCount(s);
     if (count >= s.maxCapacity) return true;
-    if (s.applyUntil && new Date() > new Date(s.applyUntil)) return true;
+    if (s.applyUntil && now > new Date(s.applyUntil)) return true;
     return false;
   };
 
-  const isUpcoming = (s: ScheduleItem) => new Date(s.dateStart) > new Date();
+  const isUpcoming = (s: ScheduleItem) => {
+    if (s.applyFrom && now < new Date(s.applyFrom)) return true;
+    return false;
+  };
+
   const isInProgress = (s: ScheduleItem) => !isUpcoming(s) && !isClosed(s);
+
+  const getScheduleStatus = (s: ScheduleItem): "예정" | "진행중" | "마감" =>
+    isClosed(s) ? "마감" : isUpcoming(s) ? "예정" : "진행중";
+
+  const formatDateRange = (s: ScheduleItem): string => {
+    const slots = s.slots;
+    if (slots && slots.length > 1) {
+      const dates = slots.map((x) => x.date).filter(Boolean).sort();
+      if (dates.length >= 2) {
+        return `${format(new Date(dates[0]), "M/d (EEE)", { locale: ko })}~${format(new Date(dates[dates.length - 1]), "M/d (EEE)", { locale: ko })}`;
+      }
+    }
+    if (slots && slots.length === 1 && slots[0].date) {
+      return format(new Date(slots[0].date), "M/d (EEE)", { locale: ko });
+    }
+    const start = s.dateStart;
+    const end = s.dateEnd;
+    if (start && end && start.slice(0, 10) !== end.slice(0, 10)) {
+      return `${format(new Date(start), "M/d (EEE)", { locale: ko })}~${format(new Date(end), "M/d (EEE)", { locale: ko })}`;
+    }
+    return format(new Date(start || end), "M/d (EEE)", { locale: ko });
+  };
 
   const getItemColor = (s: ScheduleItem) => {
     if (isClosed(s)) return "bg-red-100 border-red-300 text-red-800";
@@ -106,12 +137,8 @@ export function TabApplications({ tenantId }: Props) {
     return list;
   }, [schedules, statusFilter, searchQuery]);
 
-  const columns = selectedSchedule
-    ? ["신청일시", ...parseCustomFields(selectedSchedule.customFields).map((f) => f.label)]
-    : [];
-  const fieldIds = selectedSchedule
-    ? parseCustomFields(selectedSchedule.customFields).map((f) => f.id)
-    : [];
+  const fields = selectedSchedule ? parseCustomFields(selectedSchedule.customFields) : [];
+  const columns = selectedSchedule ? ["신청일시", ...fields.map((f) => f.label)] : [];
   const rows = byItem.map((a) => {
     let data: Record<string, string> = {};
     try {
@@ -119,7 +146,7 @@ export function TabApplications({ tenantId }: Props) {
     } catch {}
     return [
       format(new Date(a.createdAt), "yyyy-MM-dd HH:mm", { locale: ko }),
-      ...fieldIds.map((id) => String(data[id] ?? "")),
+      ...fields.map((f) => String(data[f.label] ?? "")),
     ];
   });
 
@@ -233,9 +260,9 @@ export function TabApplications({ tenantId }: Props) {
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm text-gray-600">필터:</span>
           {filterBtn("all", "전체", "bg-gray-300 text-gray-800")}
+          {filterBtn("upcoming", "예정", "bg-pastel-sky text-gray-800")}
           {filterBtn("in_progress", "진행중", "bg-pastel-mint text-gray-800")}
           {filterBtn("closed", "마감", "bg-red-200 text-red-800")}
-          {filterBtn("upcoming", "예정", "bg-pastel-sky text-gray-800")}
         </div>
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -257,14 +284,26 @@ export function TabApplications({ tenantId }: Props) {
             onClick={() => setSelectedItemId(s.id === selectedItemId ? null : s.id)}
             className={`btn-bounce rounded-2xl border-2 p-4 text-left transition-shadow hover:shadow-md ${getItemColor(s)}`}
           >
-            <p className="font-medium truncate">{s.title}</p>
+            <div className="flex items-start justify-between gap-2">
+              <p className="font-medium truncate flex-1 min-w-0">{s.title}</p>
+              <span
+                className={`shrink-0 rounded-lg px-2 py-0.5 text-xs font-medium ${
+                  getScheduleStatus(s) === "예정"
+                    ? "bg-pastel-sky/80 text-gray-800"
+                    : getScheduleStatus(s) === "진행중"
+                    ? "bg-pastel-mint text-gray-800"
+                    : "bg-red-200 text-red-800"
+                }`}
+              >
+                {getScheduleStatus(s)}
+              </span>
+            </div>
             <p className="text-sm opacity-90 mt-0.5">
-              {format(new Date(s.dateStart), "M/d (EEE)", { locale: ko })}
-              {s.timeLabel ? ` ${s.timeLabel}` : ""}
+              {formatDateRange(s)}
+              {s.timeLabel && !(s.slots && s.slots.length > 1) ? ` ${s.timeLabel}` : ""}
             </p>
             <p className="text-sm mt-1">
               신청 <strong>{getScheduleCount(s)}</strong> / {s.maxCapacity}명
-              {isClosed(s) && <span className="ml-1 text-red-600 font-bold">· 마감</span>}
             </p>
           </button>
         ))}

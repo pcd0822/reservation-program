@@ -11,6 +11,7 @@ const SCHEDULE_HEADERS = [
   "TimeLabel",
   "MaxCapacity",
   "ApplyUntil",
+  "ApplyFrom",
   "CustomFields",
   "Slots",
 ];
@@ -167,7 +168,7 @@ async function ensureScheduleTab(sheetId: string): Promise<void> {
   }
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: `'${SCHEDULE_SHEET_NAME}'!A1:J1`,
+    range: `'${SCHEDULE_SHEET_NAME}'!A1:K1`,
   });
   const existing = (res.data.values?.[0] ?? []) as string[];
   if (existing.length === 0 || existing[0] === "") {
@@ -213,6 +214,7 @@ export async function sheetReadSchedules(sheetId: string): Promise<
     timeLabel: string | null;
     maxCapacity: number;
     applyUntil: string | null;
+    applyFrom: string | null;
     customFields: string;
     slots: ScheduleSlot[];
   }[]
@@ -223,7 +225,7 @@ export async function sheetReadSchedules(sheetId: string): Promise<
   try {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: `'${SCHEDULE_SHEET_NAME}'!A2:J`,
+      range: `'${SCHEDULE_SHEET_NAME}'!A2:K`,
     });
     rows = (res.data.values ?? []) as string[][];
   } catch {
@@ -234,7 +236,11 @@ export async function sheetReadSchedules(sheetId: string): Promise<
     .map((r) => {
       const dateStart = r[3] ?? "";
       const timeLabel = r[5]?.trim() || null;
-      const slots = parseSlots(r[9], dateStart, timeLabel);
+      const hasApplyFrom = r.length >= 11;
+      const applyFrom = hasApplyFrom ? (r[8]?.trim() || null) : null;
+      const customFields = hasApplyFrom ? (r[9] ?? "[]") : (r[8] ?? "[]");
+      const slotsJson = hasApplyFrom ? r[10] : r[9];
+      const slots = parseSlots(slotsJson, dateStart, timeLabel);
       return {
         id: r[0] ?? "",
         title: r[1] ?? "",
@@ -244,7 +250,8 @@ export async function sheetReadSchedules(sheetId: string): Promise<
         timeLabel,
         maxCapacity: Math.max(1, parseInt(r[6], 10) || 1),
         applyUntil: r[7]?.trim() || null,
-        customFields: r[8] ?? "[]",
+        applyFrom,
+        customFields,
         slots,
       };
     });
@@ -261,6 +268,7 @@ export async function sheetAppendSchedule(
     timeLabel: string | null;
     maxCapacity: number;
     applyUntil: string | null;
+    applyFrom?: string | null;
     customFields: string;
     slots?: ScheduleSlot[];
   }
@@ -274,7 +282,7 @@ export async function sheetAppendSchedule(
       : "";
   await sheets.spreadsheets.values.append({
     spreadsheetId: sheetId,
-    range: `'${SCHEDULE_SHEET_NAME}'!A:J`,
+    range: `'${SCHEDULE_SHEET_NAME}'!A:K`,
     valueInputOption: "USER_ENTERED",
     insertDataOption: "INSERT_ROWS",
     requestBody: {
@@ -288,6 +296,60 @@ export async function sheetAppendSchedule(
           row.timeLabel ?? "",
           String(row.maxCapacity),
           row.applyUntil ?? "",
+          row.applyFrom ?? "",
+          row.customFields,
+          slotsJson,
+        ],
+      ],
+    },
+  });
+}
+
+export async function sheetUpdateSchedule(
+  sheetId: string,
+  scheduleId: string,
+  row: {
+    title: string;
+    type: string;
+    dateStart: string;
+    dateEnd: string;
+    timeLabel: string | null;
+    maxCapacity: number;
+    applyUntil: string | null;
+    applyFrom?: string | null;
+    customFields: string;
+    slots?: ScheduleSlot[];
+  }
+): Promise<void> {
+  const auth = getAuth();
+  const sheets = google.sheets({ version: "v4", auth });
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: `'${SCHEDULE_SHEET_NAME}'!A2:K`,
+  });
+  const rows = (res.data.values ?? []) as string[][];
+  const rowIndex = rows.findIndex((r) => r[0] === scheduleId);
+  if (rowIndex < 0) return;
+  const slotsJson =
+    row.slots && row.slots.length > 0
+      ? JSON.stringify(row.slots.map((s) => ({ date: s.date.slice(0, 10), timeLabel: s.timeLabel ?? "" })))
+      : "";
+  const range = `'${SCHEDULE_SHEET_NAME}'!B${rowIndex + 2}:K${rowIndex + 2}`;
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: sheetId,
+    range,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [
+        [
+          row.title,
+          row.type,
+          row.dateStart,
+          row.dateEnd,
+          row.timeLabel ?? "",
+          String(row.maxCapacity),
+          row.applyUntil ?? "",
+          row.applyFrom ?? "",
           row.customFields,
           slotsJson,
         ],

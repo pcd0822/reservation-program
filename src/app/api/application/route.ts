@@ -99,6 +99,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "선택한 일시는 마감되었습니다." }, { status: 400 });
     }
     const now = new Date();
+    if (schedule.applyFrom && now < new Date(schedule.applyFrom)) {
+      return NextResponse.json({ error: "아직 신청 가능 시간이 아닙니다." }, { status: 400 });
+    }
     if (schedule.applyUntil && now > new Date(schedule.applyUntil)) {
       return NextResponse.json({ error: "해당 일정의 신청 기간이 마감되었습니다." }, { status: 400 });
     }
