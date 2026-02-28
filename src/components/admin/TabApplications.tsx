@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useMemo } from "react";
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterval, startOfWeek, endOfWeek, isSameMonth, isToday } from "date-fns";
 import { ko } from "date-fns/locale";
 import { parseCustomFields, parseDateFromSheet } from "@/lib/utils";
-import { FileSpreadsheet, FileImage, FileText, Search, CalendarDays, LayoutGrid } from "lucide-react";
+import { FileSpreadsheet, FileImage, FileText, Search, CalendarDays, LayoutGrid, ChevronDown } from "lucide-react";
 
 type StatusFilter = "all" | "in_progress" | "closed" | "upcoming";
 
@@ -46,9 +46,18 @@ export function TabApplications({ tenantId }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"card" | "calendar">("card");
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
-  const [pendingScheduleId, setPendingScheduleId] = useState<string | null>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
   const tableRef = useRef<HTMLDivElement>(null);
   const captureRef = useRef<HTMLDivElement>(null);
+  const filterRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const close = (e: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false);
+    };
+    if (filterOpen) document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [filterOpen]);
 
   const load = () => {
     fetch(`/api/schedule?tenantId=${tenantId}`)
@@ -149,9 +158,11 @@ export function TabApplications({ tenantId }: Props) {
 
   const slotKey = (date: string, timeLabel: string) => `${(date || "").slice(0, 10)}_${timeLabel ?? ""}`;
 
+  type CalendarItemStatus = "예정" | "진행중" | "마감";
   const calendarDayData = useMemo(() => {
-    const byDate: Record<string, { scheduleId: string; title: string; count: number; maxCapacity: number }[]> = {};
+    const byDate: Record<string, { scheduleId: string; title: string; count: number; maxCapacity: number; status: CalendarItemStatus }[]> = {};
     filteredSchedules.forEach((s) => {
+      const status = getScheduleStatus(s);
       const slots = s.slots && s.slots.length > 0 ? s.slots : [{ date: s.dateStart?.slice(0, 10) ?? "", timeLabel: s.timeLabel ?? "" }];
       if (slots.length > 0 && s.slotCounts) {
         slots.forEach((slot) => {
@@ -159,14 +170,14 @@ export function TabApplications({ tenantId }: Props) {
           if (!d) return;
           const cnt = s.slotCounts![slotKey(slot.date ?? "", slot.timeLabel ?? "")] ?? 0;
           if (!byDate[d]) byDate[d] = [];
-          byDate[d].push({ scheduleId: s.id, title: s.title, count: cnt, maxCapacity: s.maxCapacity });
+          byDate[d].push({ scheduleId: s.id, title: s.title, count: cnt, maxCapacity: s.maxCapacity, status });
         });
       } else {
         const d = (s.dateStart ?? "").slice(0, 10);
         if (!d) return;
         const cnt = getScheduleCount(s);
         if (!byDate[d]) byDate[d] = [];
-        byDate[d].push({ scheduleId: s.id, title: s.title, count: cnt, maxCapacity: s.maxCapacity });
+        byDate[d].push({ scheduleId: s.id, title: s.title, count: cnt, maxCapacity: s.maxCapacity, status });
       }
     });
     return byDate;
@@ -284,16 +295,6 @@ export function TabApplications({ tenantId }: Props) {
     }
   };
 
-  const filterBtn = (key: StatusFilter, label: string, color: string) => (
-    <button
-      type="button"
-      onClick={() => setStatusFilter(key)}
-      className={`btn-bounce rounded-xl px-4 py-2 text-sm font-medium transition-colors ${statusFilter === key ? color : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-    >
-      {label}
-    </button>
-  );
-
   return (
     <div className="card-soft p-6 md:p-8 space-y-6">
       <h2 className="text-xl font-bold text-gray-800">신청내역 관리</h2>
@@ -301,15 +302,8 @@ export function TabApplications({ tenantId }: Props) {
         일정을 클릭하면 해당 일정의 신청자 목록을 테이블로 볼 수 있어요. 마감된 일정은 빨간색으로 표시돼요.
       </p>
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-gray-600">필터:</span>
-          {filterBtn("all", "전체", "bg-gray-300 text-gray-800")}
-          {filterBtn("upcoming", "예정", "bg-pastel-sky text-gray-800")}
-          {filterBtn("in_progress", "진행중", "bg-pastel-mint text-gray-800")}
-          {filterBtn("closed", "마감", "bg-red-200 text-red-800")}
-        </div>
-        <div className="relative flex-1 max-w-xs">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <div className="relative w-full sm:w-auto sm:min-w-[200px] sm:max-w-xs order-1 sm:order-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
@@ -319,7 +313,28 @@ export function TabApplications({ tenantId }: Props) {
             className="w-full pl-9 pr-4 py-2 rounded-xl border-2 border-pastel-lavender text-sm text-gray-800 placeholder-gray-400 focus:border-pastel-pink focus:outline-none"
           />
         </div>
-        <div className="flex items-center gap-1 rounded-xl border-2 border-pastel-lavender p-1 bg-gray-50">
+        <div ref={filterRef} className="relative order-2">
+          <button
+            type="button"
+            onClick={() => setFilterOpen((o) => !o)}
+            className="btn-bounce rounded-xl border-2 border-pastel-lavender px-3 py-2 text-sm font-medium inline-flex items-center gap-1.5 bg-gray-50 text-gray-700 hover:bg-gray-100 min-w-[72px]"
+          >
+            {statusFilter === "all" && "전체"}
+            {statusFilter === "upcoming" && "예정"}
+            {statusFilter === "in_progress" && "진행중"}
+            {statusFilter === "closed" && "마감"}
+            <ChevronDown className="w-4 h-4 shrink-0 opacity-70" />
+          </button>
+          {filterOpen && (
+            <div className="absolute top-full left-0 mt-1 py-1 rounded-xl border-2 border-pastel-lavender bg-white shadow-lg z-10 min-w-[100px]">
+              <button type="button" onClick={() => { setStatusFilter("all"); setFilterOpen(false); }} className={`w-full text-left px-3 py-2 text-sm ${statusFilter === "all" ? "bg-gray-200 font-medium" : "hover:bg-gray-100"}`}>전체</button>
+              <button type="button" onClick={() => { setStatusFilter("upcoming"); setFilterOpen(false); }} className={`w-full text-left px-3 py-2 text-sm ${statusFilter === "upcoming" ? "bg-pastel-sky/50 font-medium" : "hover:bg-gray-100"}`}>예정</button>
+              <button type="button" onClick={() => { setStatusFilter("in_progress"); setFilterOpen(false); }} className={`w-full text-left px-3 py-2 text-sm ${statusFilter === "in_progress" ? "bg-pastel-mint/50 font-medium" : "hover:bg-gray-100"}`}>진행중</button>
+              <button type="button" onClick={() => { setStatusFilter("closed"); setFilterOpen(false); }} className={`w-full text-left px-3 py-2 text-sm ${statusFilter === "closed" ? "bg-red-100 font-medium" : "hover:bg-gray-100"}`}>마감</button>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-1 rounded-xl border-2 border-pastel-lavender p-1 bg-gray-50 order-3">
           <button
             type="button"
             onClick={() => setViewMode("card")}
@@ -417,49 +432,33 @@ export function TabApplications({ tenantId }: Props) {
                       {format(day, "d")}
                     </span>
                     <div className="mt-0.5 space-y-0.5 overflow-y-auto max-h-[calc(100%-1.25rem)]">
-                      {items.map((item) => (
-                        <button
-                          key={item.scheduleId + dateStr}
-                          type="button"
-                          onClick={() => setPendingScheduleId((prev) => (prev === item.scheduleId ? null : item.scheduleId))}
-                          className={`w-full text-left rounded-lg px-1.5 py-0.5 text-xs truncate border transition-colors ${
-                            pendingScheduleId === item.scheduleId
-                              ? "bg-pastel-pink/40 border-pastel-pink text-gray-800"
-                              : "bg-pastel-sky/30 border-pastel-sky/60 text-gray-800 hover:bg-pastel-sky/50"
-                          }`}
-                          title={`${item.title} · ${item.count}/${item.maxCapacity}명 (선택하려면 '선택' 버튼을 누르세요)`}
-                        >
-                          {item.title} <strong>{item.count}/{item.maxCapacity}</strong>
-                        </button>
-                      ))}
+                      {items.map((item) => {
+                        const baseColor =
+                          item.status === "마감"
+                            ? "bg-red-100 border-red-300 text-red-800 hover:bg-red-200/80"
+                            : item.status === "진행중"
+                              ? "bg-pastel-mint/60 border-pastel-mint text-gray-800 hover:bg-pastel-mint/80"
+                              : "bg-pastel-sky/40 border-pastel-sky text-gray-800 hover:bg-pastel-sky/60";
+                        return (
+                          <button
+                            key={item.scheduleId + dateStr}
+                            type="button"
+                            onClick={() => setSelectedItemId(item.scheduleId === selectedItemId ? null : item.scheduleId)}
+                            className={`w-full text-left rounded-lg px-1.5 py-0.5 text-xs truncate border transition-colors ${
+                              selectedItemId === item.scheduleId ? "bg-pastel-pink/50 border-pastel-pink text-gray-800 ring-1 ring-pastel-pink" : baseColor
+                            }`}
+                            title={`${item.title} · ${item.count}/${item.maxCapacity}명 · ${item.status}`}
+                          >
+                            {item.title} <strong>{item.count}/{item.maxCapacity}</strong>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 );
               })}
             </div>
           </div>
-          {pendingScheduleId && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm text-gray-600">선택한 일정을 확인하려면</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedItemId(pendingScheduleId);
-                  setPendingScheduleId(null);
-                }}
-                className="btn-bounce rounded-xl bg-pastel-pink px-4 py-2 text-sm font-medium text-gray-800"
-              >
-                선택
-              </button>
-              <button
-                type="button"
-                onClick={() => setPendingScheduleId(null)}
-                className="rounded-xl bg-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-300"
-              >
-                취소
-              </button>
-            </div>
-          )}
         </div>
       )}
 

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { CalendarPlus } from "lucide-react";
+import { useState, useMemo } from "react";
+import { CalendarPlus, CalendarDays } from "lucide-react";
 import { CustomFieldsEditor } from "./CustomFieldsEditor";
 import type { CustomField } from "@/lib/utils";
-import { startOfWeek, endOfWeek, parseISO } from "date-fns";
+import { startOfWeek, endOfWeek, parseISO, format, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterval, isSameMonth } from "date-fns";
+import { ko } from "date-fns/locale";
 
 type ScheduleType = "week" | "day" | "time";
 
@@ -29,6 +30,9 @@ export function TabSchedules({ tenantId }: Props) {
   const [sameSlotTitles, setSameSlotTitles] = useState<string[]>([""]);
   const [creating, setCreating] = useState(false);
   const [createdLinks, setCreatedLinks] = useState<{ studentUrl: string; qrDataUrl: string } | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date());
+  const [pendingCalendarDate, setPendingCalendarDate] = useState<string | null>(null);
 
   const addSameSlot = () => {
     setSameSlotTitles((p) => [...p, ""]);
@@ -63,6 +67,20 @@ export function TabSchedules({ tenantId }: Props) {
     });
   };
   const removeSlot = (i: number) => setSlots((p) => (p.length > 1 ? p.filter((_, idx) => idx !== i) : [{ date: "", timeLabel: "" }]));
+
+  const calendarGrid = useMemo(() => {
+    const start = startOfWeek(startOfMonth(calendarMonth), { weekStartsOn: 0 });
+    const end = endOfWeek(endOfMonth(calendarMonth), { weekStartsOn: 0 });
+    return eachDayOfInterval({ start, end });
+  }, [calendarMonth]);
+
+  const applyCalendarDate = () => {
+    if (!pendingCalendarDate) return;
+    const last = slots[slots.length - 1];
+    setSlots((p) => [...p, { date: pendingCalendarDate, timeLabel: type === "time" ? (last?.timeLabel ?? "") : "" }]);
+    setPendingCalendarDate(null);
+    setCalendarOpen(false);
+  };
 
   const handleCreate = async () => {
     if (!canCreate) return;
@@ -263,14 +281,73 @@ export function TabSchedules({ tenantId }: Props) {
               </button>
             </div>
           ))}
-          <button
-            type="button"
-            onClick={addSlot}
-            className="btn-bounce rounded-xl bg-pastel-sky/80 px-3 py-2 text-sm font-medium inline-flex items-center gap-2 text-gray-800 hover:bg-pastel-sky"
-          >
-            <CalendarPlus className="w-5 h-5 text-pastel-pink shrink-0" strokeWidth={2} />
-            일시 추가
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={addSlot}
+              className="btn-bounce rounded-xl bg-pastel-sky/80 px-3 py-2 text-sm font-medium inline-flex items-center gap-2 text-gray-800 hover:bg-pastel-sky"
+            >
+              <CalendarPlus className="w-5 h-5 text-pastel-pink shrink-0" strokeWidth={2} />
+              일시 추가
+            </button>
+            <button
+              type="button"
+              onClick={() => { setCalendarOpen((o) => !o); setPendingCalendarDate(null); setCalendarMonth(new Date()); }}
+              className="btn-bounce rounded-xl bg-pastel-lavender/80 px-3 py-2 text-sm font-medium inline-flex items-center gap-2 text-gray-800"
+            >
+              <CalendarDays className="w-5 h-5 shrink-0" />
+              캘린더에서 날짜 선택
+            </button>
+          </div>
+          {calendarOpen && (
+            <div className="mt-4 p-4 rounded-2xl border-2 border-pastel-lavender bg-white/90 space-y-3">
+              <p className="text-sm font-medium text-gray-700">날짜를 클릭한 뒤 &#39;선택&#39; 버튼을 누르면 일시로 추가돼요.</p>
+              <div className="flex items-center justify-between gap-2">
+                <button type="button" onClick={() => setCalendarMonth((m) => subMonths(m, 1))} className="btn-bounce rounded-lg px-2 py-1 text-sm text-gray-600 hover:bg-gray-100">이전</button>
+                <span className="text-sm font-bold text-gray-800">{format(calendarMonth, "yyyy년 M월", { locale: ko })}</span>
+                <button type="button" onClick={() => setCalendarMonth((m) => addMonths(m, 1))} className="btn-bounce rounded-lg px-2 py-1 text-sm text-gray-600 hover:bg-gray-100">다음</button>
+              </div>
+              <div className="grid grid-cols-7 gap-0.5 text-center">
+                {["일", "월", "화", "수", "목", "금", "토"].map((d) => (
+                  <div key={d} className="py-1 text-xs font-semibold text-gray-500">{d}</div>
+                ))}
+                {calendarGrid.map((day) => {
+                  const dateStr = format(day, "yyyy-MM-dd");
+                  const inMonth = isSameMonth(day, calendarMonth);
+                  const isPending = pendingCalendarDate === dateStr;
+                  return (
+                    <button
+                      key={dateStr}
+                      type="button"
+                      onClick={() => setPendingCalendarDate(dateStr)}
+                      className={`rounded-lg py-1.5 text-sm ${
+                        inMonth
+                          ? isPending
+                            ? "bg-pastel-pink text-gray-800 font-bold"
+                            : "hover:bg-pastel-sky/40 text-gray-800"
+                          : "text-gray-300"
+                      }`}
+                    >
+                      {format(day, "d")}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {pendingCalendarDate && (
+                  <>
+                    <span className="text-sm text-gray-600">{format(new Date(pendingCalendarDate), "yyyy년 M월 d일 (EEE)", { locale: ko })}</span>
+                    <button type="button" onClick={applyCalendarDate} className="btn-bounce rounded-xl bg-pastel-pink px-4 py-2 text-sm font-medium text-gray-800">
+                      선택
+                    </button>
+                  </>
+                )}
+                <button type="button" onClick={() => { setCalendarOpen(false); setPendingCalendarDate(null); }} className="rounded-xl bg-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-300">
+                  취소
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
