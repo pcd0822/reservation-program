@@ -47,7 +47,7 @@ export function TabScheduleManage({ tenantId }: Props) {
     slots: { date: string; timeLabel: string }[];
   } | null>(null);
   const [saving, setSaving] = useState(false);
-  const [linkRegenModal, setLinkRegenModal] = useState(false);
+  const [savedLinks, setSavedLinks] = useState<{ studentUrl: string; qrDataUrl: string } | null>(null);
 
   const load = () => {
     fetch(`/api/schedule?tenantId=${tenantId}`)
@@ -208,7 +208,11 @@ export function TabScheduleManage({ tenantId }: Props) {
       });
       load();
       closeEdit();
-      setLinkRegenModal(true);
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      const studentUrl = `${origin}/s/${tenantId}`;
+      const QRCode = (await import("qrcode")).default;
+      const qrDataUrl = await QRCode.toDataURL(studentUrl, { width: 256, margin: 2 });
+      setSavedLinks({ studentUrl, qrDataUrl });
     } catch (e) {
       console.error(e);
       alert("수정 중 오류가 났어요.");
@@ -410,17 +414,45 @@ export function TabScheduleManage({ tenantId }: Props) {
         </div>
       )}
 
-      {linkRegenModal && (
+      {savedLinks && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
             <h3 className="text-lg font-bold text-gray-800">일정이 수정되었습니다</h3>
-            <p className="text-sm text-gray-600">
-              일정 관리 페이지에서 변경 사항이 반영되었어요. <strong>신청 링크와 QR 코드를 다시 확인·공유</strong>해 주세요.
-            </p>
+            <p className="text-sm text-gray-600">변경 사항이 반영되었어요. 아래 신청 링크와 QR 코드를 공유하세요.</p>
+            <div className="flex flex-col sm:flex-row gap-4 items-start">
+              <div className="rounded-2xl bg-gray-50 p-4 flex-shrink-0">
+                <img src={savedLinks.qrDataUrl} alt="QR" className="w-40 h-40 rounded-xl" />
+                <a
+                  href={savedLinks.qrDataUrl}
+                  download="qrcode.png"
+                  className="btn-bounce mt-2 block text-center rounded-xl bg-pastel-sky py-2 text-sm font-medium"
+                >
+                  QR 이미지 저장
+                </a>
+              </div>
+              <div className="flex-1 min-w-0 w-full">
+                <label className="block text-sm font-medium text-gray-700 mb-1">신청 링크</label>
+                <input
+                  readOnly
+                  value={savedLinks.studentUrl}
+                  className="w-full rounded-2xl border border-pastel-lavender px-4 py-2 text-sm text-gray-800 bg-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(savedLinks.studentUrl);
+                    alert("클립보드에 복사되었어요!");
+                  }}
+                  className="btn-bounce mt-2 rounded-2xl bg-pastel-pink px-4 py-2 text-sm font-medium text-gray-800"
+                >
+                  링크 복사
+                </button>
+              </div>
+            </div>
             <button
               type="button"
-              onClick={() => setLinkRegenModal(false)}
-              className="btn-bounce w-full rounded-2xl bg-pastel-pink py-2 font-medium"
+              onClick={() => setSavedLinks(null)}
+              className="btn-bounce w-full rounded-2xl bg-pastel-lavender py-2 font-medium"
             >
               확인
             </button>
