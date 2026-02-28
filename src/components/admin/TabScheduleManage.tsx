@@ -49,9 +49,13 @@ export function TabScheduleManage({ tenantId }: Props) {
   const [saving, setSaving] = useState(false);
   const [savedLinks, setSavedLinks] = useState<{ studentUrl: string; qrDataUrl: string } | null>(null);
   const [maxCapacityInput, setMaxCapacityInput] = useState("");
-  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [calendarOpenForSlot, setCalendarOpenForSlot] = useState<number | null>(null);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const [pendingCalendarDate, setPendingCalendarDate] = useState<string | null>(null);
+  const [slotDtPickerFor, setSlotDtPickerFor] = useState<number | null>(null);
+  const [slotDtPickerMonth, setSlotDtPickerMonth] = useState(() => new Date());
+  const [slotDtPickerDate, setSlotDtPickerDate] = useState<string | null>(null);
+  const [slotDtPickerTime, setSlotDtPickerTime] = useState("09:00");
   const [dtPickerFor, setDtPickerFor] = useState<"from" | "until" | null>(null);
   const [dtPickerMonth, setDtPickerMonth] = useState(() => new Date());
   const [dtPickerDate, setDtPickerDate] = useState<string | null>(null);
@@ -178,15 +182,52 @@ export function TabScheduleManage({ tenantId }: Props) {
     return eachDayOfInterval({ start, end });
   }, [calendarMonth]);
 
-  const applyEditCalendarDate = () => {
-    if (!editForm || !pendingCalendarDate) return;
-    const last = editForm.slots[editForm.slots.length - 1];
+  const openEditSlotCalendar = (i: number) => {
+    if (!editForm) return;
+    const d = editForm.slots[i]?.date?.slice(0, 10);
+    setPendingCalendarDate(d || null);
+    setCalendarMonth(d ? new Date(d) : new Date());
+    setCalendarOpenForSlot(i);
+    setSlotDtPickerFor(null);
+  };
+
+  const applyEditCalendarDateToSlot = () => {
+    if (!editForm || calendarOpenForSlot === null || !pendingCalendarDate) return;
     setEditForm({
       ...editForm,
-      slots: [...editForm.slots, { date: pendingCalendarDate, timeLabel: editForm.type === "time" ? (last?.timeLabel ?? "") : "" }],
+      slots: editForm.slots.map((s, idx) =>
+        idx === calendarOpenForSlot ? { ...s, date: pendingCalendarDate } : s
+      ),
     });
+    setCalendarOpenForSlot(null);
     setPendingCalendarDate(null);
-    setCalendarOpen(false);
+  };
+
+  const slotDtPickerGrid = useMemo(() => {
+    const start = startOfWeek(startOfMonth(slotDtPickerMonth), { weekStartsOn: 0 });
+    const end = endOfWeek(endOfMonth(slotDtPickerMonth), { weekStartsOn: 0 });
+    return eachDayOfInterval({ start, end });
+  }, [slotDtPickerMonth]);
+
+  const openEditSlotDtPicker = (i: number) => {
+    if (!editForm) return;
+    const slot = editForm.slots[i];
+    const d = slot?.date?.slice(0, 10);
+    setSlotDtPickerDate(d || null);
+    setSlotDtPickerTime(slot?.timeLabel && /^\d{1,2}:\d{2}$/.test(slot.timeLabel) ? slot.timeLabel : "09:00");
+    setSlotDtPickerMonth(d ? new Date(d) : new Date());
+    setSlotDtPickerFor(i);
+  };
+
+  const applyEditSlotDtPicker = () => {
+    if (!editForm || slotDtPickerFor === null || !slotDtPickerDate) return;
+    setEditForm({
+      ...editForm,
+      slots: editForm.slots.map((s, idx) =>
+        idx === slotDtPickerFor ? { ...s, date: slotDtPickerDate, timeLabel: slotDtPickerTime } : s
+      ),
+    });
+    setSlotDtPickerFor(null);
   };
 
   const dtPickerGrid = useMemo(() => {
@@ -373,49 +414,53 @@ export function TabScheduleManage({ tenantId }: Props) {
             {(editForm.type === "day" || editForm.type === "time") && (
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-1">신청 가능 일시</p>
+                <p className="text-xs text-gray-500 mb-2">
+                  {editForm.type === "day" && "날짜를 선택하세요. 여러 개가 필요하면 \"일시 추가\"를 누르세요."}
+                  {editForm.type === "time" && "날짜와 시간을 선택하세요. 여러 개가 필요하면 \"일시 추가\"를 누르세요."}
+                </p>
                 {editForm.slots.map((slot, i) => (
-                  <div key={i} className="flex gap-2 mb-2">
-                    <input
-                      type="date"
-                      value={slot.date}
-                      onChange={(e) => updateEditSlot(i, "date", e.target.value)}
-                      className="flex-1 rounded-2xl border-2 border-pastel-lavender px-3 py-2"
-                    />
-                    {editForm.type === "time" && (
-                      <input
-                        type="text"
-                        value={slot.timeLabel}
-                        onChange={(e) => updateEditSlot(i, "timeLabel", e.target.value)}
-                        placeholder="시간"
-                        className="w-28 rounded-2xl border-2 border-pastel-lavender px-3 py-2"
-                      />
+                  <div key={i} className="flex gap-2 mb-2 items-center">
+                    {editForm.type === "day" ? (
+                      <>
+                        <input
+                          type="date"
+                          value={slot.date}
+                          onChange={(e) => updateEditSlot(i, "date", e.target.value)}
+                          className="flex-1 min-w-0 rounded-2xl border-2 border-pastel-lavender px-3 py-2 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:w-0"
+                        />
+                        <button type="button" onClick={() => openEditSlotCalendar(i)} className="btn-bounce rounded-xl bg-pastel-lavender/80 p-2 text-gray-700 hover:bg-pastel-lavender shrink-0" title="캘린더에서 날짜 선택">
+                          <CalendarDays className="w-5 h-5" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="flex-1 min-w-0 rounded-2xl border-2 border-pastel-lavender bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                          {slot.date && slot.timeLabel
+                            ? `${format(new Date(slot.date), "yyyy-MM-dd (EEE)", { locale: ko })} ${slot.timeLabel}`
+                            : "미설정"}
+                        </span>
+                        <button type="button" onClick={() => openEditSlotDtPicker(i)} className="btn-bounce rounded-xl bg-pastel-lavender/80 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-pastel-lavender shrink-0 inline-flex items-center gap-1.5">
+                          <CalendarDays className="w-5 h-5" />
+                          날짜·시간 선택
+                        </button>
+                      </>
                     )}
-                    <button type="button" onClick={() => removeEditSlot(i)} className="btn-bounce rounded-xl bg-red-100 px-2 text-red-700 text-sm">
+                    <button type="button" onClick={() => removeEditSlot(i)} className="btn-bounce rounded-xl bg-red-100 px-2 py-2 text-red-700 text-sm shrink-0">
                       삭제
                     </button>
                   </div>
                 ))}
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={addEditSlot}
-                    className="btn-bounce rounded-xl bg-pastel-sky/80 px-3 py-2 text-sm inline-flex items-center gap-1"
-                  >
-                    <CalendarPlus className="w-4 h-4" />
-                    일시 추가
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setCalendarOpen((o) => !o); setPendingCalendarDate(null); setCalendarMonth(new Date()); }}
-                    className="btn-bounce rounded-xl bg-pastel-lavender/80 px-3 py-2 text-sm inline-flex items-center gap-1 text-gray-800"
-                  >
-                    <CalendarDays className="w-4 h-4" />
-                    캘린더에서 날짜 선택
-                  </button>
-                </div>
-                {calendarOpen && (
+                <button
+                  type="button"
+                  onClick={addEditSlot}
+                  className="btn-bounce rounded-xl bg-pastel-sky/80 px-3 py-2 text-sm inline-flex items-center gap-1"
+                >
+                  <CalendarPlus className="w-4 h-4" />
+                  일시 추가
+                </button>
+                {calendarOpenForSlot !== null && (
                   <div className="mt-4 p-4 rounded-2xl border-2 border-pastel-lavender bg-white/90 space-y-3">
-                    <p className="text-sm font-medium text-gray-700">날짜를 클릭한 뒤 &#39;선택&#39; 버튼을 누르면 일시로 추가돼요.</p>
+                    <p className="text-sm font-medium text-gray-700">날짜를 클릭한 뒤 '선택' 버튼을 누르면 해당 일시에 반영돼요.</p>
                     <div className="flex items-center justify-between gap-2">
                       <button type="button" onClick={() => setCalendarMonth((m) => subMonths(m, 1))} className="btn-bounce rounded-lg px-2 py-1 text-sm text-gray-600 hover:bg-gray-100">이전</button>
                       <span className="text-sm font-bold text-gray-800">{format(calendarMonth, "yyyy년 M월", { locale: ko })}</span>
@@ -434,13 +479,7 @@ export function TabScheduleManage({ tenantId }: Props) {
                             key={dateStr}
                             type="button"
                             onClick={() => setPendingCalendarDate(dateStr)}
-                            className={`rounded-lg py-1.5 text-sm ${
-                              inMonth
-                                ? isPending
-                                  ? "bg-pastel-pink text-gray-800 font-bold"
-                                  : "hover:bg-pastel-sky/40 text-gray-800"
-                                : "text-gray-300"
-                            }`}
+                            className={`rounded-lg py-1.5 text-sm ${inMonth ? (isPending ? "bg-pastel-pink text-gray-800 font-bold" : "hover:bg-pastel-sky/40 text-gray-800") : "text-gray-300"}`}
                           >
                             {format(day, "d")}
                           </button>
@@ -451,14 +490,51 @@ export function TabScheduleManage({ tenantId }: Props) {
                       {pendingCalendarDate && (
                         <>
                           <span className="text-sm text-gray-600">{format(new Date(pendingCalendarDate), "yyyy년 M월 d일 (EEE)", { locale: ko })}</span>
-                          <button type="button" onClick={applyEditCalendarDate} className="btn-bounce rounded-xl bg-pastel-pink px-4 py-2 text-sm font-medium text-gray-800">
-                            선택
-                          </button>
+                          <button type="button" onClick={applyEditCalendarDateToSlot} className="btn-bounce rounded-xl bg-pastel-pink px-4 py-2 text-sm font-medium text-gray-800">선택</button>
                         </>
                       )}
-                      <button type="button" onClick={() => { setCalendarOpen(false); setPendingCalendarDate(null); }} className="rounded-xl bg-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-300">
-                        취소
-                      </button>
+                      <button type="button" onClick={() => { setCalendarOpenForSlot(null); setPendingCalendarDate(null); }} className="rounded-xl bg-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-300">취소</button>
+                    </div>
+                  </div>
+                )}
+                {editForm.type === "time" && slotDtPickerFor !== null && (
+                  <div className="mt-4 p-4 rounded-2xl border-2 border-pastel-lavender bg-white/90 space-y-3">
+                    <p className="text-sm font-medium text-gray-700">날짜와 시간을 고른 뒤 '선택'을 누르면 해당 일시에 반영돼요.</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <button type="button" onClick={() => setSlotDtPickerMonth((m) => subMonths(m, 1))} className="btn-bounce rounded-lg px-2 py-1 text-sm text-gray-600 hover:bg-gray-100">이전</button>
+                      <span className="text-sm font-bold text-gray-800">{format(slotDtPickerMonth, "yyyy년 M월", { locale: ko })}</span>
+                      <button type="button" onClick={() => setSlotDtPickerMonth((m) => addMonths(m, 1))} className="btn-bounce rounded-lg px-2 py-1 text-sm text-gray-600 hover:bg-gray-100">다음</button>
+                    </div>
+                    <div className="grid grid-cols-7 gap-0.5 text-center">
+                      {["일", "월", "화", "수", "목", "금", "토"].map((d) => (
+                        <div key={d} className="py-1 text-xs font-semibold text-gray-500">{d}</div>
+                      ))}
+                      {slotDtPickerGrid.map((day) => {
+                        const dateStr = format(day, "yyyy-MM-dd");
+                        const inMonth = isSameMonth(day, slotDtPickerMonth);
+                        const isPending = slotDtPickerDate === dateStr;
+                        return (
+                          <button
+                            key={dateStr}
+                            type="button"
+                            onClick={() => setSlotDtPickerDate(dateStr)}
+                            className={`rounded-lg py-1.5 text-sm ${inMonth ? (isPending ? "bg-pastel-pink text-gray-800 font-bold" : "hover:bg-pastel-sky/40 text-gray-800") : "text-gray-300"}`}
+                          >
+                            {format(day, "d")}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="text-sm text-gray-700">시간</label>
+                      <input type="time" value={slotDtPickerTime} onChange={(e) => setSlotDtPickerTime(e.target.value)} className="rounded-xl border-2 border-pastel-lavender px-3 py-2 text-sm" />
+                      {slotDtPickerDate && (
+                        <>
+                          <span className="text-sm text-gray-600">{format(new Date(slotDtPickerDate), "M/d (EEE)", { locale: ko })} {slotDtPickerTime}</span>
+                          <button type="button" onClick={applyEditSlotDtPicker} className="btn-bounce rounded-xl bg-pastel-pink px-4 py-2 text-sm font-medium text-gray-800">선택</button>
+                        </>
+                      )}
+                      <button type="button" onClick={() => setSlotDtPickerFor(null)} className="rounded-xl bg-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-300">취소</button>
                     </div>
                   </div>
                 )}
@@ -507,7 +583,7 @@ export function TabScheduleManage({ tenantId }: Props) {
             {dtPickerFor && (
               <div className="p-4 rounded-2xl border-2 border-pastel-lavender bg-white/95 space-y-3">
                 <p className="text-sm font-medium text-gray-700">
-                  {dtPickerFor === "from" ? "신청 가능 시작일시" : "신청 마감일시"} — 날짜와 시간을 고른 뒤 &#39;선택&#39;을 누르세요.
+                  {dtPickerFor === "from" ? "신청 가능 시작일시" : "신청 마감일시"} — 날짜와 시간을 고른 뒤 '선택'을 누르세요.
                 </p>
                 <div className="flex items-center justify-between gap-2">
                   <button type="button" onClick={() => setDtPickerMonth((m) => subMonths(m, 1))} className="btn-bounce rounded-lg px-2 py-1 text-sm text-gray-600 hover:bg-gray-100">이전</button>

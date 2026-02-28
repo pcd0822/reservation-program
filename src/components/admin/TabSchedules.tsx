@@ -341,6 +341,51 @@ export function TabSchedules({ tenantId }: Props) {
         </div>
       )}
 
+      {type === "week" && weekDatePickerFor !== null && (
+        <div className="mt-4 p-4 rounded-2xl border-2 border-pastel-lavender bg-white/90 space-y-3">
+          <p className="text-sm font-medium text-gray-700">
+            {weekDatePickerFor === "start" && "시작일을 클릭한 뒤 '선택'을 누르세요."}
+            {weekDatePickerFor === "end" && "종료일을 클릭한 뒤 '선택'을 누르세요."}
+          </p>
+          <div className="flex items-center justify-between gap-2">
+            <button type="button" onClick={() => setCalendarMonth((m) => subMonths(m, 1))} className="btn-bounce rounded-lg px-2 py-1 text-sm text-gray-600 hover:bg-gray-100">이전</button>
+            <span className="text-sm font-bold text-gray-800">{format(calendarMonth, "yyyy년 M월", { locale: ko })}</span>
+            <button type="button" onClick={() => setCalendarMonth((m) => addMonths(m, 1))} className="btn-bounce rounded-lg px-2 py-1 text-sm text-gray-600 hover:bg-gray-100">다음</button>
+          </div>
+          <div className="grid grid-cols-7 gap-0.5 text-center">
+            {["일", "월", "화", "수", "목", "금", "토"].map((d) => (
+              <div key={d} className="py-1 text-xs font-semibold text-gray-500">{d}</div>
+            ))}
+            {calendarGrid.map((day) => {
+              const dateStr = format(day, "yyyy-MM-dd");
+              const inMonth = isSameMonth(day, calendarMonth);
+              const isPending = pendingCalendarDate === dateStr;
+              return (
+                <button
+                  key={dateStr}
+                  type="button"
+                  onClick={() => setPendingCalendarDate(dateStr)}
+                  className={`rounded-lg py-1.5 text-sm ${
+                    inMonth ? (isPending ? "bg-pastel-pink text-gray-800 font-bold" : "hover:bg-pastel-sky/40 text-gray-800") : "text-gray-300"
+                  }`}
+                >
+                  {format(day, "d")}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {pendingCalendarDate && (
+              <>
+                <span className="text-sm text-gray-600">{format(new Date(pendingCalendarDate), "yyyy년 M월 d일 (EEE)", { locale: ko })}</span>
+                <button type="button" onClick={applyCalendarDateToSlot} className="btn-bounce rounded-xl bg-pastel-pink px-4 py-2 text-sm font-medium text-gray-800">선택</button>
+              </>
+            )}
+            <button type="button" onClick={() => { setWeekDatePickerFor(null); setPendingCalendarDate(null); }} className="rounded-xl bg-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-300">취소</button>
+          </div>
+        </div>
+      )}
+
       {(type === "day" || type === "time") && (
         <div>
           <p className="text-sm font-medium text-gray-700 mb-1">신청 가능 일시</p>
@@ -391,9 +436,9 @@ export function TabSchedules({ tenantId }: Props) {
           {(calendarOpenForSlot !== null || weekDatePickerFor !== null) && (
             <div className="mt-4 p-4 rounded-2xl border-2 border-pastel-lavender bg-white/90 space-y-3">
               <p className="text-sm font-medium text-gray-700">
-                {weekDatePickerFor === "start" && "시작일을 클릭한 뒤 &#39;선택&#39;을 누르세요."}
-                {weekDatePickerFor === "end" && "종료일을 클릭한 뒤 &#39;선택&#39;을 누르세요."}
-                {calendarOpenForSlot !== null && !weekDatePickerFor && "날짜를 클릭한 뒤 &#39;선택&#39; 버튼을 누르면 해당 일시에 반영돼요."}
+                {weekDatePickerFor === "start" && "시작일을 클릭한 뒤 '선택'을 누르세요."}
+                {weekDatePickerFor === "end" && "종료일을 클릭한 뒤 '선택'을 누르세요."}
+                {calendarOpenForSlot !== null && !weekDatePickerFor && "날짜를 클릭한 뒤 '선택' 버튼을 누르면 해당 일시에 반영돼요."}
               </p>
               <div className="flex items-center justify-between gap-2">
                 <button type="button" onClick={() => setCalendarMonth((m) => subMonths(m, 1))} className="btn-bounce rounded-lg px-2 py-1 text-sm text-gray-600 hover:bg-gray-100">이전</button>
@@ -443,7 +488,7 @@ export function TabSchedules({ tenantId }: Props) {
           )}
           {type === "time" && slotDtPickerFor !== null && (
             <div className="mt-4 p-4 rounded-2xl border-2 border-pastel-lavender bg-white/90 space-y-3">
-              <p className="text-sm font-medium text-gray-700">날짜와 시간을 고른 뒤 &#39;선택&#39;을 누르면 해당 일시에 반영돼요.</p>
+              <p className="text-sm font-medium text-gray-700">날짜와 시간을 고른 뒤 '선택'을 누르면 해당 일시에 반영돼요.</p>
               <div className="flex items-center justify-between gap-2">
                 <button type="button" onClick={() => setSlotDtPickerMonth((m) => subMonths(m, 1))} className="btn-bounce rounded-lg px-2 py-1 text-sm text-gray-600 hover:bg-gray-100">이전</button>
                 <span className="text-sm font-bold text-gray-800">{format(slotDtPickerMonth, "yyyy년 M월", { locale: ko })}</span>
@@ -570,7 +615,7 @@ export function TabSchedules({ tenantId }: Props) {
       {dtPickerFor && (
         <div className="p-4 rounded-2xl border-2 border-pastel-lavender bg-white/95 space-y-3">
           <p className="text-sm font-medium text-gray-700">
-            {dtPickerFor === "from" ? "예약 신청 가능 시작일시" : "예약 신청 마감일시"} — 날짜와 시간을 고른 뒤 &#39;선택&#39;을 누르세요.
+            {dtPickerFor === "from" ? "예약 신청 가능 시작일시" : "예약 신청 마감일시"} — 날짜와 시간을 고른 뒤 '선택'을 누르세요.
           </p>
           <div className="flex items-center justify-between gap-2">
             <button type="button" onClick={() => setDtPickerMonth((m) => subMonths(m, 1))} className="btn-bounce rounded-lg px-2 py-1 text-sm text-gray-600 hover:bg-gray-100">이전</button>
