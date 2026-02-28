@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState, useRef, useMemo } from "react";
-import { format } from "date-fns";
+import { format, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterval, startOfWeek, endOfWeek, isSameMonth, isToday } from "date-fns";
 import { ko } from "date-fns/locale";
 import { parseCustomFields, parseDateFromSheet } from "@/lib/utils";
-import { FileSpreadsheet, FileImage, FileText, Search } from "lucide-react";
+import { FileSpreadsheet, FileImage, FileText, Search, CalendarDays, LayoutGrid } from "lucide-react";
 
 type StatusFilter = "all" | "in_progress" | "closed" | "upcoming";
 
@@ -44,6 +44,9 @@ export function TabApplications({ tenantId }: Props) {
   const [downloading, setDownloading] = useState<"xlsx" | "pdf" | "image" | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"card" | "calendar">("card");
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date());
+  const [pendingScheduleId, setPendingScheduleId] = useState<string | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
   const captureRef = useRef<HTMLDivElement>(null);
 
@@ -143,6 +146,37 @@ export function TabApplications({ tenantId }: Props) {
     }
     return list;
   }, [schedules, statusFilter, searchQuery]);
+
+  const slotKey = (date: string, timeLabel: string) => `${(date || "").slice(0, 10)}_${timeLabel ?? ""}`;
+
+  const calendarDayData = useMemo(() => {
+    const byDate: Record<string, { scheduleId: string; title: string; count: number; maxCapacity: number }[]> = {};
+    filteredSchedules.forEach((s) => {
+      const slots = s.slots && s.slots.length > 0 ? s.slots : [{ date: s.dateStart?.slice(0, 10) ?? "", timeLabel: s.timeLabel ?? "" }];
+      if (slots.length > 0 && s.slotCounts) {
+        slots.forEach((slot) => {
+          const d = slot.date?.slice(0, 10);
+          if (!d) return;
+          const cnt = s.slotCounts![slotKey(slot.date ?? "", slot.timeLabel ?? "")] ?? 0;
+          if (!byDate[d]) byDate[d] = [];
+          byDate[d].push({ scheduleId: s.id, title: s.title, count: cnt, maxCapacity: s.maxCapacity });
+        });
+      } else {
+        const d = (s.dateStart ?? "").slice(0, 10);
+        if (!d) return;
+        const cnt = getScheduleCount(s);
+        if (!byDate[d]) byDate[d] = [];
+        byDate[d].push({ scheduleId: s.id, title: s.title, count: cnt, maxCapacity: s.maxCapacity });
+      }
+    });
+    return byDate;
+  }, [filteredSchedules]);
+
+  const calendarGrid = useMemo(() => {
+    const start = startOfWeek(startOfMonth(calendarMonth), { weekStartsOn: 0 });
+    const end = endOfWeek(endOfMonth(calendarMonth), { weekStartsOn: 0 });
+    return eachDayOfInterval({ start, end });
+  }, [calendarMonth]);
 
   const fields = selectedSchedule ? parseCustomFields(selectedSchedule.customFields) : [];
   const columns = selectedSchedule ? ["신청일시", ...fields.map((f) => f.label)] : [];
@@ -285,8 +319,27 @@ export function TabApplications({ tenantId }: Props) {
             className="w-full pl-9 pr-4 py-2 rounded-xl border-2 border-pastel-lavender text-sm text-gray-800 placeholder-gray-400 focus:border-pastel-pink focus:outline-none"
           />
         </div>
+        <div className="flex items-center gap-1 rounded-xl border-2 border-pastel-lavender p-1 bg-gray-50">
+          <button
+            type="button"
+            onClick={() => setViewMode("card")}
+            className={`btn-bounce rounded-lg px-3 py-2 text-sm font-medium inline-flex items-center gap-1.5 ${viewMode === "card" ? "bg-white border border-pastel-lavender shadow-sm text-gray-800" : "text-gray-600 hover:bg-gray-100"}`}
+          >
+            <LayoutGrid className="w-4 h-4" />
+            목록
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("calendar")}
+            className={`btn-bounce rounded-lg px-3 py-2 text-sm font-medium inline-flex items-center gap-1.5 ${viewMode === "calendar" ? "bg-white border border-pastel-lavender shadow-sm text-gray-800" : "text-gray-600 hover:bg-gray-100"}`}
+          >
+            <CalendarDays className="w-4 h-4" />
+            캘린더
+          </button>
+        </div>
       </div>
 
+      {viewMode === "card" && (
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
         {filteredSchedules.map((s) => (
           <button
@@ -319,6 +372,96 @@ export function TabApplications({ tenantId }: Props) {
           </button>
         ))}
       </div>
+      )}
+
+      {viewMode === "calendar" && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setCalendarMonth((m) => subMonths(m, 1))}
+              className="btn-bounce rounded-xl px-3 py-2 text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200"
+            >
+              이전 달
+            </button>
+            <span className="text-lg font-bold text-gray-800">
+              {format(calendarMonth, "yyyy년 M월", { locale: ko })}
+            </span>
+            <button
+              type="button"
+              onClick={() => setCalendarMonth((m) => addMonths(m, 1))}
+              className="btn-bounce rounded-xl px-3 py-2 text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200"
+            >
+              다음 달
+            </button>
+          </div>
+          <div className="rounded-2xl border-2 border-pastel-lavender overflow-hidden bg-white">
+            <div className="grid grid-cols-7 border-b border-pastel-lavender bg-gray-50">
+              {["일", "월", "화", "수", "목", "금", "토"].map((d) => (
+                <div key={d} className="py-2 text-center text-xs font-semibold text-gray-600">
+                  {d}
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 auto-rows-fr min-h-[320px]">
+              {calendarGrid.map((day) => {
+                const dateStr = format(day, "yyyy-MM-dd");
+                const inMonth = isSameMonth(day, calendarMonth);
+                const items = calendarDayData[dateStr] ?? [];
+                return (
+                  <div
+                    key={dateStr}
+                    className={`min-h-[80px] border-b border-r border-pastel-lavender/50 p-1.5 ${inMonth ? "bg-white" : "bg-gray-50/80"}`}
+                  >
+                    <span className={`text-sm font-medium ${inMonth ? (isToday(day) ? "text-pastel-pink" : "text-gray-700") : "text-gray-400"}`}>
+                      {format(day, "d")}
+                    </span>
+                    <div className="mt-0.5 space-y-0.5 overflow-y-auto max-h-[calc(100%-1.25rem)]">
+                      {items.map((item) => (
+                        <button
+                          key={item.scheduleId + dateStr}
+                          type="button"
+                          onClick={() => setPendingScheduleId((prev) => (prev === item.scheduleId ? null : item.scheduleId))}
+                          className={`w-full text-left rounded-lg px-1.5 py-0.5 text-xs truncate border transition-colors ${
+                            pendingScheduleId === item.scheduleId
+                              ? "bg-pastel-pink/40 border-pastel-pink text-gray-800"
+                              : "bg-pastel-sky/30 border-pastel-sky/60 text-gray-800 hover:bg-pastel-sky/50"
+                          }`}
+                          title={`${item.title} · ${item.count}/${item.maxCapacity}명 (선택하려면 '선택' 버튼을 누르세요)`}
+                        >
+                          {item.title} <strong>{item.count}/{item.maxCapacity}</strong>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          {pendingScheduleId && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-gray-600">선택한 일정을 확인하려면</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedItemId(pendingScheduleId);
+                  setPendingScheduleId(null);
+                }}
+                className="btn-bounce rounded-xl bg-pastel-pink px-4 py-2 text-sm font-medium text-gray-800"
+              >
+                선택
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingScheduleId(null)}
+                className="rounded-xl bg-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-300"
+              >
+                취소
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {schedules.length === 0 && (
         <p className="text-gray-500 text-sm">아직 일정이 없어요. 일정 만들기에서 먼저 만드세요.</p>

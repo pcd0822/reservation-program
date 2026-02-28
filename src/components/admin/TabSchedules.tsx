@@ -20,7 +20,9 @@ export function TabSchedules({ tenantId }: Props) {
   const [dateEnd, setDateEnd] = useState("");
   const [timeLabel, setTimeLabel] = useState("");
   const [slots, setSlots] = useState<SlotRow[]>([{ date: "", timeLabel: "" }]);
-  const [maxCapacity, setMaxCapacity] = useState(5);
+  const [maxCapacityStr, setMaxCapacityStr] = useState("5");
+  const maxCapacityNum = Math.max(1, parseInt(maxCapacityStr, 10) || 0);
+  const maxCapacity = maxCapacityNum < 1 ? 1 : maxCapacityNum;
   const [applyFrom, setApplyFrom] = useState("");
   const [applyUntil, setApplyUntil] = useState("");
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
@@ -46,7 +48,7 @@ export function TabSchedules({ tenantId }: Props) {
   const slotsToSend = (type === "day" || type === "time") ? slots.filter((s) => s.date.trim()) : [];
   const canCreate =
     type &&
-    maxCapacity >= 1 &&
+    maxCapacityNum >= 1 &&
     (type === "week" ? dateStart && dateEnd : type === "day" || type === "time" ? slotsToSend.length >= 1 : dateStart);
 
   const addSlot = () => {
@@ -319,10 +321,13 @@ export function TabSchedules({ tenantId }: Props) {
         <input
           type="number"
           min={1}
-          value={maxCapacity}
-          onChange={(e) => setMaxCapacity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+          value={maxCapacityStr}
+          onChange={(e) => setMaxCapacityStr(e.target.value)}
           className="w-24 rounded-2xl border-2 border-pastel-lavender px-3 py-2"
         />
+        {maxCapacityStr !== "" && maxCapacityNum < 1 && (
+          <p className="text-xs text-amber-600 mt-1">1 이상의 숫자를 입력해 주세요.</p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

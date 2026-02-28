@@ -48,6 +48,7 @@ export function TabScheduleManage({ tenantId }: Props) {
   } | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedLinks, setSavedLinks] = useState<{ studentUrl: string; qrDataUrl: string } | null>(null);
+  const [maxCapacityInput, setMaxCapacityInput] = useState("");
 
   const load = () => {
     fetch(`/api/schedule?tenantId=${tenantId}`)
@@ -135,12 +136,14 @@ export function TabScheduleManage({ tenantId }: Props) {
       customFields: parseCustomFields(s.customFields),
       slots: slotsForForm,
     });
+    setMaxCapacityInput(String(s.maxCapacity));
     setEditingId(s.id);
   };
 
   const closeEdit = () => {
     setEditingId(null);
     setEditForm(null);
+    setMaxCapacityInput("");
   };
 
   const updateEditSlot = (i: number, field: "date" | "timeLabel", value: string) => {
@@ -180,8 +183,8 @@ export function TabScheduleManage({ tenantId }: Props) {
         dateS = new Date(sorted[0].date);
         dateE = new Date(sorted[sorted.length - 1].date);
       } else {
-        dateS = editForm.dateStart ? parseISO(editForm.dateStart) : new Date();
-        dateE = editForm.dateEnd ? parseISO(editForm.dateEnd) : dateS;
+        dateS = editForm.applyFrom ? new Date(editForm.applyFrom) : new Date();
+        dateE = editForm.applyUntil ? new Date(editForm.applyUntil) : dateS;
       }
       const bodySlots =
         slotsToSend.length > 0
@@ -199,7 +202,7 @@ export function TabScheduleManage({ tenantId }: Props) {
           dateStart: dateS.toISOString(),
           dateEnd: dateE.toISOString(),
           timeLabel: editForm.type === "time" ? editForm.timeLabel || null : null,
-          maxCapacity: editForm.maxCapacity,
+          maxCapacity: Math.max(1, parseInt(maxCapacityInput, 10) || 1),
           applyFrom: editForm.applyFrom ? new Date(editForm.applyFrom).toISOString() : null,
           applyUntil: editForm.applyUntil ? new Date(editForm.applyUntil).toISOString() : null,
           customFields: JSON.stringify(editForm.customFields),
@@ -349,22 +352,18 @@ export function TabScheduleManage({ tenantId }: Props) {
             )}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">시작일</label>
-                <input
-                  type="date"
-                  value={editForm.dateStart}
-                  onChange={(e) => setEditForm({ ...editForm, dateStart: e.target.value })}
-                  className="w-full rounded-2xl border-2 border-pastel-lavender px-3 py-2"
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1">시작일시</label>
+                <div className="w-full rounded-2xl border-2 border-pastel-lavender bg-gray-50 px-3 py-2 text-gray-700 text-sm">
+                  {editForm.applyFrom ? format(new Date(editForm.applyFrom), "yyyy-MM-dd HH:mm", { locale: ko }) : "—"}
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5">신청 가능 일시의 처음 (수정 불가)</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">종료일</label>
-                <input
-                  type="date"
-                  value={editForm.dateEnd}
-                  onChange={(e) => setEditForm({ ...editForm, dateEnd: e.target.value })}
-                  className="w-full rounded-2xl border-2 border-pastel-lavender px-3 py-2"
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1">종료일시</label>
+                <div className="w-full rounded-2xl border-2 border-pastel-lavender bg-gray-50 px-3 py-2 text-gray-700 text-sm">
+                  {editForm.applyUntil ? format(new Date(editForm.applyUntil), "yyyy-MM-dd HH:mm", { locale: ko }) : "—"}
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5">신청 가능 일시의 끝 (수정 불가)</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -392,10 +391,13 @@ export function TabScheduleManage({ tenantId }: Props) {
               <input
                 type="number"
                 min={1}
-                value={editForm.maxCapacity}
-                onChange={(e) => setEditForm({ ...editForm, maxCapacity: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                value={maxCapacityInput}
+                onChange={(e) => setMaxCapacityInput(e.target.value)}
                 className="w-24 rounded-2xl border-2 border-pastel-lavender px-3 py-2"
               />
+              {maxCapacityInput !== "" && (parseInt(maxCapacityInput, 10) || 0) < 1 && (
+                <p className="text-xs text-amber-600 mt-1">1 이상의 숫자를 입력해 주세요.</p>
+              )}
             </div>
             <CustomFieldsEditor fields={editForm.customFields} onChange={(f) => setEditForm({ ...editForm, customFields: f })} />
             <div className="flex gap-2 pt-2">
