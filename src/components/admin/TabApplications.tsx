@@ -45,6 +45,7 @@ export function TabApplications({ tenantId }: Props) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const tableRef = useRef<HTMLDivElement>(null);
+  const captureRef = useRef<HTMLDivElement>(null);
 
   const load = () => {
     fetch(`/api/schedule?tenantId=${tenantId}`)
@@ -159,7 +160,8 @@ export function TabApplications({ tenantId }: Props) {
   const downloadXlsx = async () => {
     setDownloading("xlsx");
     try {
-      const XLSX = (await import("xlsx")).default;
+      const mod = await import("xlsx");
+      const XLSX = mod.default?.utils ? mod.default : mod;
       const wb = XLSX.utils.book_new();
       const headerRow = columns.length ? columns.map((c) => String(c ?? "")) : ["신청일시"];
       const dataRows = rows.map((row) => row.map((cell) => String(cell ?? "")));
@@ -198,23 +200,26 @@ export function TabApplications({ tenantId }: Props) {
   };
 
   const downloadPdf = async () => {
+    if (!captureRef.current) return;
     setDownloading("pdf");
     try {
+      const html2canvas = (await import("html2canvas")).default;
       const { jsPDF } = await import("jspdf");
-      const { autoTable } = await import("jspdf-autotable");
-      const doc = new jsPDF({ orientation: "landscape", unit: "mm" });
-      doc.setFont("helvetica");
-      doc.setFontSize(12);
-      doc.text(selectedSchedule?.title ?? "신청 목록", 14, 12);
-      const head = [columns.map((c) => String(c ?? ""))];
-      const body = rows.map((row) => row.map((cell) => String(cell ?? "")));
-      autoTable(doc, {
-        head,
-        body,
-        startY: 18,
-        styles: { fontSize: 8, cellPadding: 2 },
-        headStyles: { fillColor: [200, 200, 220] },
+      const canvas = await html2canvas(captureRef.current, {
+        backgroundColor: "#ffffff",
+        scale: 2,
       });
+      const imgData = canvas.toDataURL("image/png");
+      const doc = new jsPDF({ orientation: "landscape", unit: "mm" });
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      const pxToMm = 25.4 / 96;
+      let w = canvas.width * pxToMm;
+      let h = canvas.height * pxToMm;
+      const scale = Math.min((pageW * 0.95) / w, (pageH * 0.95) / h, 1);
+      w *= scale;
+      h *= scale;
+      doc.addImage(imgData, "PNG", (pageW - w) / 2, (pageH - h) / 2, w, h);
       doc.save(`신청목록_${(selectedSchedule?.title ?? "일정").replace(/[/\\*?:\[\]]/g, "_")}_${format(new Date(), "yyyyMMdd")}.pdf`);
     } catch (e) {
       console.error(e);
@@ -225,16 +230,16 @@ export function TabApplications({ tenantId }: Props) {
   };
 
   const downloadImage = async () => {
-    if (!tableRef.current) return;
+    if (!captureRef.current) return;
     setDownloading("image");
     try {
       const html2canvas = (await import("html2canvas")).default;
-      const canvas = await html2canvas(tableRef.current, {
+      const canvas = await html2canvas(captureRef.current, {
         backgroundColor: "#ffffff",
         scale: 2,
       });
       const link = document.createElement("a");
-      link.download = `신청목록_${selectedSchedule?.title ?? "일정"}_${format(new Date(), "yyyyMMdd")}.png`;
+      link.download = `신청목록_${(selectedSchedule?.title ?? "일정").replace(/[/\\*?:\[\]]/g, "_")}_${format(new Date(), "yyyyMMdd")}.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
     } catch (e) {
@@ -358,9 +363,11 @@ export function TabApplications({ tenantId }: Props) {
           </div>
 
           <div
-            ref={tableRef}
-            className="overflow-x-auto rounded-2xl border border-pastel-lavender bg-white"
+            ref={captureRef}
+            className="rounded-2xl border-2 border-pastel-lavender bg-white p-4 space-y-2"
           >
+            <p className="font-bold text-gray-800 text-sm">신청자 목록 · {selectedSchedule.title}</p>
+            <div ref={tableRef} className="overflow-x-auto rounded-xl border border-pastel-lavender bg-white">
             {byItem.length === 0 ? (
               <p className="text-gray-500 text-sm p-4">아직 신청자가 없어요.</p>
             ) : (
@@ -396,6 +403,7 @@ export function TabApplications({ tenantId }: Props) {
                 </tbody>
               </table>
             )}
+            </div>
           </div>
         </div>
       )}
