@@ -207,9 +207,10 @@ export function TabScheduleManage({ tenantId }: Props) {
         }),
       });
       load();
+      const scheduleIdForLink = editingId;
       closeEdit();
       const origin = typeof window !== "undefined" ? window.location.origin : "";
-      const studentUrl = `${origin}/s/${tenantId}`;
+      const studentUrl = `${origin}/s/${tenantId}/${scheduleIdForLink}`;
       const QRCode = (await import("qrcode")).default;
       const qrDataUrl = await QRCode.toDataURL(studentUrl, { width: 256, margin: 2 });
       setSavedLinks({ studentUrl, qrDataUrl });
@@ -418,7 +419,7 @@ export function TabScheduleManage({ tenantId }: Props) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
             <h3 className="text-lg font-bold text-gray-800">일정이 수정되었습니다</h3>
-            <p className="text-sm text-gray-600">변경 사항이 반영되었어요. 아래 신청 링크와 QR 코드를 공유하세요.</p>
+            <p className="text-sm text-gray-600">변경 사항이 반영되었어요. 아래 링크를 공유하면 해당 일정만 보이고, 그 일정에 대한 신청만 받을 수 있어요.</p>
             <div className="flex flex-col sm:flex-row gap-4 items-start">
               <div className="rounded-2xl bg-gray-50 p-4 flex-shrink-0">
                 <img src={savedLinks.qrDataUrl} alt="QR" className="w-40 h-40 rounded-xl" />

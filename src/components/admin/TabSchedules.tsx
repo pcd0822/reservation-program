@@ -95,8 +95,9 @@ export function TabSchedules({ tenantId }: Props) {
           ? slotsToSend.map((s) => ({ date: s.date.slice(0, 10), timeLabel: (type === "time" ? s.timeLabel : "") || "" }))
           : undefined;
 
+      let lastCreatedId: string | null = null;
       for (const t of toCreate) {
-        await fetch("/api/schedule", {
+        const res = await fetch("/api/schedule", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -113,10 +114,15 @@ export function TabSchedules({ tenantId }: Props) {
             slots: bodySlots,
           }),
         });
+        const data = await res.json();
+        if (data?.id) lastCreatedId = data.id;
       }
 
       const origin = typeof window !== "undefined" ? window.location.origin : "";
-      const studentUrl = `${origin}/s/${tenantId}`;
+      const studentUrl =
+        lastCreatedId && toCreate.length === 1
+          ? `${origin}/s/${tenantId}/${lastCreatedId}`
+          : `${origin}/s/${tenantId}`;
       const QRCode = (await import("qrcode")).default;
       const qrDataUrl = await QRCode.toDataURL(studentUrl, { width: 256, margin: 2 });
       setCreatedLinks({ studentUrl, qrDataUrl });
