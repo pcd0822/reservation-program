@@ -22,17 +22,18 @@ export async function GET(request: NextRequest) {
     const schedules = await sheetReadSchedules(tenant.sheetId);
     const applications = await sheetReadApplications(tenant.sheetId);
     const slotKey = (date: string, time: string) => `${(date || "").slice(0, 10)}_${time ?? ""}`;
-    const countBySlot = new Map<string, number>();
+    const countByScheduleSlot = new Map<string, number>();
     applications.forEach((a) => {
-      const key = slotKey(a.날짜 ?? "", a.시간 ?? "");
-      countBySlot.set(key, (countBySlot.get(key) ?? 0) + 1);
+      const scheduleId = a.일정ID ?? "";
+      const key = `${scheduleId}|${slotKey(a.날짜 ?? "", a.시간 ?? "")}`;
+      countByScheduleSlot.set(key, (countByScheduleSlot.get(key) ?? 0) + 1);
     });
     const list = schedules
       .map((s) => {
         const slotCounts: Record<string, number> = {};
         (s.slots ?? []).forEach((slot) => {
           const key = slotKey(slot.date, slot.timeLabel);
-          slotCounts[key] = countBySlot.get(key) ?? 0;
+          slotCounts[key] = countByScheduleSlot.get(`${s.id}|${key}`) ?? 0;
         });
         return {
           ...s,

@@ -89,8 +89,8 @@ export default function AdminPage() {
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-pastel-cream via-pastel-lavender/20 to-pastel-mint/20">
-      <header className="sticky top-0 z-10 border-b border-white/50 bg-white/80 backdrop-blur rounded-b-3xl shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2 relative">
+      <header className="sticky top-0 z-10 border-b border-white/50 bg-white/80 backdrop-blur rounded-b-3xl shadow-sm relative">
+        <div className="max-w-4xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2">
           <Link
             href="/"
             className="text-gray-600 hover:text-gray-800 text-sm font-medium"
@@ -113,8 +113,8 @@ export default function AdminPage() {
               </button>
             ))}
           </div>
-          <p className="absolute top-3 right-4 text-xs text-gray-400 pointer-events-none">Designed by Deulssam</p>
         </div>
+        <p className="absolute top-1/2 -translate-y-1/2 right-4 text-xs text-gray-400 pointer-events-none">Designed by Deulssam</p>
       </header>
 
       <div className="max-w-4xl mx-auto p-4 pb-12">

@@ -128,18 +128,34 @@ export function TabApplications({ tenantId }: Props) {
     try {
       const XLSX = (await import("xlsx")).default;
       const wb = XLSX.utils.book_new();
-      const wsData = [columns, ...rows];
+      const headerRow = columns.length ? columns.map((c) => String(c ?? "")) : ["신청일시"];
+      const dataRows = rows.map((row) => row.map((cell) => String(cell ?? "")));
+      const wsData = [headerRow, ...dataRows];
       const ws = XLSX.utils.aoa_to_sheet(wsData);
-      const sheetName = "Sheet1".slice(0, 31);
-      XLSX.utils.book_append_sheet(wb, ws, sheetName);
-      const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-      const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+
+      let blob: Blob;
+      try {
+        const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+        blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      } catch {
+        const binary = XLSX.write(wb, { bookType: "xlsx", type: "binary" });
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i) & 0xff;
+        blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      }
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = `신청목록_${(selectedSchedule?.title ?? "일정").replace(/[/\\*?:\[\]]/g, "_")}_${format(new Date(), "yyyyMMdd")}.xlsx`;
+      a.style.display = "none";
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 200);
     } catch (e) {
       console.error(e);
       alert("다운로드에 실패했어요.");
