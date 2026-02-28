@@ -174,7 +174,7 @@ async function ensureScheduleTab(sheetId: string): Promise<void> {
   if (existing.length === 0 || existing[0] === "") {
     await sheets.spreadsheets.values.update({
       spreadsheetId: sheetId,
-      range: `'${SCHEDULE_SHEET_NAME}'!A1`,
+      range: `'${SCHEDULE_SHEET_NAME}'!A1:K1`,
       valueInputOption: "USER_ENTERED",
       requestBody: { values: [SCHEDULE_HEADERS] },
     });
@@ -294,7 +294,7 @@ export async function sheetAppendSchedule(
       : "";
   await sheets.spreadsheets.values.append({
     spreadsheetId: sheetId,
-    range: `'${SCHEDULE_SHEET_NAME}'!A:K`,
+    range: `'${SCHEDULE_SHEET_NAME}'!A1`,
     valueInputOption: "USER_ENTERED",
     insertDataOption: "INSERT_ROWS",
     requestBody: {
