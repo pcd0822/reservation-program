@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
         };
       })
       .sort((a, b) => new Date(a.dateStart).getTime() - new Date(b.dateStart).getTime());
-    return NextResponse.json(list);
+    return NextResponse.json({ schedules: list, serverTime: new Date().toISOString() });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: "Server error" }, { status: 500 });

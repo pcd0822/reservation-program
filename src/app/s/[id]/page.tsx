@@ -31,6 +31,7 @@ export default function StudentPage() {
   const params = useParams();
   const tenantId = params.id as string;
   const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
+  const [serverTime, setServerTime] = useState<Date | null>(null);
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [selectedSlotBySchedule, setSelectedSlotBySchedule] = useState<Record<string, SlotOption>>({});
   const [submitting, setSubmitting] = useState<string | null>(null);
@@ -43,8 +44,9 @@ export default function StudentPage() {
     fetch(`/api/schedule?tenantId=${tenantId}`)
       .then((r) => r.json())
       .then((data) => {
-        if (Array.isArray(data)) setSchedules(data);
-        else setSchedules([]);
+        const arr = Array.isArray(data) ? data : data?.schedules ?? [];
+        setSchedules(Array.isArray(arr) ? arr : []);
+        setServerTime(data?.serverTime ? new Date(data.serverTime) : null);
       })
       .catch(() => setSchedules([]));
   }, [tenantId]);
@@ -64,7 +66,7 @@ export default function StudentPage() {
     if ((s.slots?.length ?? 0) <= 1) return s._count?.applications ?? 0;
     return s.slotCounts?.[slotKey(slot.date, slot.timeLabel)] ?? 0;
   };
-  const now = new Date();
+  const now = serverTime ?? new Date();
   const isSlotNotYetOpen = (s: ScheduleItem) => {
     const from = parseDateFromSheet(s.applyFrom);
     return from != null && now < from;
@@ -132,7 +134,9 @@ export default function StudentPage() {
       }
       setMessage({ type: "ok", text: "신청되었어요!" });
       const updated = await fetch(`/api/schedule?tenantId=${tenantId}`).then((r) => r.json());
-      setSchedules(Array.isArray(updated) ? updated : schedules);
+      const arr = Array.isArray(updated) ? updated : updated?.schedules ?? [];
+      setSchedules(Array.isArray(arr) ? arr : schedules);
+      setServerTime(updated?.serverTime ? new Date(updated.serverTime) : null);
     } catch {
       setMessage({ type: "err", text: "네트워크 오류가 났어요." });
     } finally {

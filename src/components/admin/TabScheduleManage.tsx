@@ -6,7 +6,7 @@ import { ko } from "date-fns/locale";
 import { parseISO } from "date-fns";
 import { CustomFieldsEditor } from "./CustomFieldsEditor";
 import type { CustomField } from "@/lib/utils";
-import { parseCustomFields } from "@/lib/utils";
+import { parseCustomFields, parseDateFromSheet } from "@/lib/utils";
 import { CalendarPlus, Pencil } from "lucide-react";
 
 type ScheduleSlot = { date: string; timeLabel?: string };
@@ -31,6 +31,7 @@ type Props = { tenantId: string };
 
 export function TabScheduleManage({ tenantId }: Props) {
   const [list, setList] = useState<ScheduleItem[]>([]);
+  const [serverTime, setServerTime] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{
@@ -52,7 +53,9 @@ export function TabScheduleManage({ tenantId }: Props) {
     fetch(`/api/schedule?tenantId=${tenantId}`)
       .then((r) => r.json())
       .then((data) => {
-        setList(Array.isArray(data) ? data : []);
+        const arr = Array.isArray(data) ? data : data?.schedules ?? [];
+        setList(Array.isArray(arr) ? arr : []);
+        setServerTime(data?.serverTime ? new Date(data.serverTime) : null);
         setLoading(false);
       })
       .catch(() => {
@@ -73,14 +76,18 @@ export function TabScheduleManage({ tenantId }: Props) {
     return 0;
   };
 
-  const now = new Date();
+  const now = serverTime ?? new Date();
   const isClosed = (s: ScheduleItem) => {
     const count = getScheduleCount(s);
     if (count >= s.maxCapacity) return true;
-    if (s.applyUntil && now > new Date(s.applyUntil)) return true;
+    const until = parseDateFromSheet(s.applyUntil);
+    if (until != null && now > until) return true;
     return false;
   };
-  const isUpcoming = (s: ScheduleItem) => s.applyFrom != null && s.applyFrom !== "" && now < new Date(s.applyFrom);
+  const isUpcoming = (s: ScheduleItem) => {
+    const from = parseDateFromSheet(s.applyFrom);
+    return from != null && now < from;
+  };
   const isInProgress = (s: ScheduleItem) => !isUpcoming(s) && !isClosed(s);
   const getScheduleStatus = (s: ScheduleItem): "예정" | "진행중" | "마감" =>
     isClosed(s) ? "마감" : isUpcoming(s) ? "예정" : "진행중";

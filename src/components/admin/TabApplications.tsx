@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useMemo } from "react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
-import { parseCustomFields } from "@/lib/utils";
+import { parseCustomFields, parseDateFromSheet } from "@/lib/utils";
 import { FileSpreadsheet, FileImage, FileText, Search } from "lucide-react";
 
 type StatusFilter = "all" | "in_progress" | "closed" | "upcoming";
@@ -37,6 +37,7 @@ type Props = { tenantId: string };
 
 export function TabApplications({ tenantId }: Props) {
   const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
+  const [serverTime, setServerTime] = useState<Date | null>(null);
   const [applications, setApplications] = useState<Application[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -48,7 +49,11 @@ export function TabApplications({ tenantId }: Props) {
   const load = () => {
     fetch(`/api/schedule?tenantId=${tenantId}`)
       .then((r) => r.json())
-      .then((data) => setSchedules(Array.isArray(data) ? data : []));
+      .then((data) => {
+        const list = Array.isArray(data) ? data : data?.schedules ?? [];
+        setSchedules(Array.isArray(list) ? list : []);
+        setServerTime(data?.serverTime ? new Date(data.serverTime) : null);
+      });
     fetch(`/api/application?tenantId=${tenantId}`)
       .then((r) => r.json())
       .then((data) => setApplications(Array.isArray(data) ? data : []));
@@ -77,17 +82,18 @@ export function TabApplications({ tenantId }: Props) {
     return 0;
   };
 
-  const now = new Date();
+  const now = serverTime ?? new Date();
   const isClosed = (s: ScheduleItem) => {
     const count = getScheduleCount(s);
     if (count >= s.maxCapacity) return true;
-    if (s.applyUntil && now > new Date(s.applyUntil)) return true;
+    const until = parseDateFromSheet(s.applyUntil);
+    if (until != null && now > until) return true;
     return false;
   };
 
   const isUpcoming = (s: ScheduleItem) => {
-    if (s.applyFrom && now < new Date(s.applyFrom)) return true;
-    return false;
+    const from = parseDateFromSheet(s.applyFrom);
+    return from != null && now < from;
   };
 
   const isInProgress = (s: ScheduleItem) => !isUpcoming(s) && !isClosed(s);
