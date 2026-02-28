@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
-import { parseCustomFields, type CustomField } from "@/lib/utils";
+import { parseCustomFields, parseDateFromSheet, type CustomField } from "@/lib/utils";
 import { XCircle, Users } from "lucide-react";
 
 type SlotOption = { date: string; timeLabel: string };
@@ -65,13 +65,16 @@ export default function StudentPage() {
     return s.slotCounts?.[slotKey(slot.date, slot.timeLabel)] ?? 0;
   };
   const now = new Date();
-  const isSlotNotYetOpen = (s: ScheduleItem) =>
-    s.applyFrom != null && s.applyFrom !== "" && now < new Date(s.applyFrom);
+  const isSlotNotYetOpen = (s: ScheduleItem) => {
+    const from = parseDateFromSheet(s.applyFrom);
+    return from != null && now < from;
+  };
   const isSlotClosed = (s: ScheduleItem, slot: SlotOption) => {
     if (isSlotNotYetOpen(s)) return { closed: true, reason: "아직 신청 가능 시간이 아님" as const };
     const count = getSlotCount(s, slot);
     if (count >= s.maxCapacity) return { closed: true, reason: "인원 마감" as const };
-    if (s.applyUntil && now > new Date(s.applyUntil)) return { closed: true, reason: "신청 기간 마감" as const };
+    const until = parseDateFromSheet(s.applyUntil);
+    if (until != null && now > until) return { closed: true, reason: "신청 기간 마감" as const };
     return { closed: false, reason: null };
   };
   const getEffectiveSlot = (s: ScheduleItem): SlotOption | null => {

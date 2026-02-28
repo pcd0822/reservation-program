@@ -237,7 +237,19 @@ export async function sheetReadSchedules(sheetId: string): Promise<
       const dateStart = r[3] ?? "";
       const timeLabel = r[5]?.trim() || null;
       const hasApplyFrom = r.length >= 11;
-      const applyFrom = hasApplyFrom ? (r[8]?.trim() || null) : null;
+      const parseDateCell = (val: unknown): string | null => {
+        if (val == null || val === "") return null;
+        if (typeof val === "number" && Number.isFinite(val)) {
+          const ms = val > 1e12 ? val : (val - 25569) * 86400 * 1000;
+          return new Date(ms).toISOString();
+        }
+        const s = String(val).trim();
+        if (!s) return null;
+        const d = new Date(s);
+        return Number.isNaN(d.getTime()) ? null : d.toISOString();
+      };
+      const applyFrom = parseDateCell(hasApplyFrom ? r[8] : undefined);
+      const applyUntil = parseDateCell(r[7]);
       const customFields = hasApplyFrom ? (r[9] ?? "[]") : (r[8] ?? "[]");
       const slotsJson = hasApplyFrom ? r[10] : r[9];
       const slots = parseSlots(slotsJson, dateStart, timeLabel);
@@ -249,7 +261,7 @@ export async function sheetReadSchedules(sheetId: string): Promise<
         dateEnd: r[4] ?? "",
         timeLabel,
         maxCapacity: Math.max(1, parseInt(r[6], 10) || 1),
-        applyUntil: r[7]?.trim() || null,
+        applyUntil,
         applyFrom,
         customFields,
         slots,
@@ -358,7 +370,85 @@ export async function sheetUpdateSchedule(
   });
 }
 
+function getApplicationSheetName(scheduleId: string): string {
+  const safe = String(scheduleId).replace(/[:\\/?*[\]]/g, "_").slice(0, 28);
+  return `신청_${safe}`;
+}
+
+/** 일정별 신청 시트를 생성하고 행을 추가 */
+async function ensureApplicationSheet(sheetId: string, scheduleId: string): Promise<string> {
+  const auth = getAuth();
+  const sheets = google.sheets({ version: "v4", auth });
+  const targetName = getApplicationSheetName(scheduleId);
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
+  const exists = meta.data.sheets?.some((s) => s.properties?.title === targetName);
+  if (!exists) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: sheetId,
+      requestBody: {
+        requests: [{ addSheet: { properties: { title: targetName } } }],
+      },
+    });
+  }
+  return targetName.replace(/'/g, "''");
+}
+
+/** 신청 시트(일정별)를 삭제하거나, 구 시트 형식이면 해당 일정 행들을 삭제 */
+async function sheetDeleteApplicationsByScheduleId(sheetId: string, scheduleId: string): Promise<void> {
+  const auth = getAuth();
+  const sheets = google.sheets({ version: "v4", auth });
+  const targetName = getApplicationSheetName(scheduleId);
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
+  const scheduleSheet = meta.data.sheets?.find((s) => s.properties?.title === targetName);
+  if (scheduleSheet?.properties?.sheetId !== undefined) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: sheetId,
+      requestBody: {
+        requests: [{ deleteSheet: { sheetId: scheduleSheet.properties.sheetId } }],
+      },
+    });
+    return;
+  }
+  const appSheetName = (meta.data.sheets?.[0]?.properties?.title ?? "Sheet1").replace(/'/g, "''");
+  let rows: string[][];
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: sheetId,
+      range: `'${appSheetName}'!A:A`,
+    });
+    rows = (res.data.values ?? []) as string[][];
+  } catch {
+    return;
+  }
+  if (rows.length < 2) return;
+  const indicesToDelete: number[] = [];
+  for (let i = 1; i < rows.length; i++) {
+    const rowId = rows[i]?.[0]?.trim();
+    if (rowId === scheduleId) indicesToDelete.push(i);
+  }
+  if (indicesToDelete.length === 0) return;
+  const appSheet = meta.data.sheets?.[0];
+  const appSheetIdNum = appSheet?.properties?.sheetId;
+  if (appSheetIdNum === undefined) return;
+  indicesToDelete.sort((a, b) => b - a);
+  const requests = indicesToDelete.map((idx0) => ({
+    deleteDimension: {
+      range: {
+        sheetId: appSheetIdNum,
+        dimension: "ROWS",
+        startIndex: idx0,
+        endIndex: idx0 + 1,
+      },
+    },
+  }));
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: sheetId,
+    requestBody: { requests },
+  });
+}
+
 export async function sheetDeleteSchedule(sheetId: string, scheduleId: string): Promise<void> {
+  await sheetDeleteApplicationsByScheduleId(sheetId, scheduleId);
   const auth = getAuth();
   const sheets = google.sheets({ version: "v4", auth });
   const res = await sheets.spreadsheets.values.get({
@@ -391,47 +481,71 @@ export async function sheetDeleteSchedule(sheetId: string, scheduleId: string): 
   });
 }
 
-// ----- 사용자 시트: 신청 탭 (첫 시트) -----
+// ----- 사용자 시트: 신청 탭 (일정별 시트) -----
 
 export async function sheetReadApplications(
-  sheetId: string
+  sheetId: string,
+  scheduleId?: string
 ): Promise<{ 일정ID: string; 일정명: string; 날짜: string; 시간: string; 신청일시: string; [key: string]: string }[]> {
   const auth = getAuth();
   const sheets = google.sheets({ version: "v4", auth });
-  const appSheetName = await getFirstSheetName(sheetId);
-  let rows: string[][];
-  try {
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId: sheetId,
-      range: `'${appSheetName}'!A:Z`,
-    });
-    rows = (res.data.values ?? []) as string[][];
-  } catch {
-    return [];
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
+  const prefix = "신청_";
+  let targetSheets = meta.data.sheets?.filter((s) => {
+    const t = s.properties?.title ?? "";
+    return t.startsWith(prefix);
+  }) ?? [];
+  if (targetSheets.length === 0 && !scheduleId) {
+    const first = meta.data.sheets?.[0];
+    if (first) targetSheets = [first];
   }
-  if (rows.length < 2) return [];
-  const headers = rows[0].map((h) => String(h ?? "").trim());
   const result: { 일정ID: string; 일정명: string; 날짜: string; 시간: string; 신청일시: string; [key: string]: string }[] = [];
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    if (!row?.[0]?.trim()) continue;
-    const obj: Record<string, string> = { 일정ID: "", 일정명: "", 날짜: "", 시간: "", 신청일시: "" };
-    headers.forEach((h, j) => {
-      obj[h] = row[j] != null ? String(row[j]) : "";
-    });
-    result.push(obj as { 일정ID: string; 일정명: string; 날짜: string; 시간: string; 신청일시: string; [key: string]: string });
+  for (const s of targetSheets) {
+    const name = s.properties?.title ?? "";
+    const isScheduleSheet = name.startsWith(prefix);
+    const sheetSid = isScheduleSheet ? name.slice(prefix.length) : "";
+    if (scheduleId && isScheduleSheet) {
+      const expectedSuffix = scheduleId.replace(/[:\\/?*[\]]/g, "_").slice(0, 28);
+      if (sheetSid !== expectedSuffix) continue;
+    }
+    const escaped = name.replace(/'/g, "''");
+    let rows: string[][];
+    try {
+      const res = await sheets.spreadsheets.values.get({
+        spreadsheetId: sheetId,
+        range: `'${escaped}'!A:Z`,
+      });
+      rows = (res.data.values ?? []) as string[][];
+    } catch {
+      continue;
+    }
+    if (rows.length < 2) continue;
+    const headers = rows[0].map((h) => String(h ?? "").trim());
+    const sidCol = headers.indexOf("일정ID");
+    const resolvedId = sidCol >= 0 && rows[1]?.[sidCol] ? String(rows[1][sidCol]) : sheetSid;
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row?.[0]?.trim() && !row?.[1]?.trim()) continue;
+      const obj: Record<string, string> = { 일정ID: resolvedId, 일정명: "", 날짜: "", 시간: "", 신청일시: "" };
+      headers.forEach((h, j) => {
+        obj[h] = row[j] != null ? String(row[j]) : "";
+      });
+      obj.일정ID = obj.일정ID || resolvedId;
+      result.push(obj as { 일정ID: string; 일정명: string; 날짜: string; 시간: string; 신청일시: string; [key: string]: string });
+    }
   }
   return result;
 }
 
 export async function sheetAppendApplication(
   sheetId: string,
+  scheduleId: string,
   headers: string[],
   row: (string | number)[]
 ): Promise<void> {
   const auth = getAuth();
   const sheets = google.sheets({ version: "v4", auth });
-  const appSheetName = await getFirstSheetName(sheetId);
+  const appSheetName = await ensureApplicationSheet(sheetId, scheduleId);
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
     range: `'${appSheetName}'!A1:Z1`,

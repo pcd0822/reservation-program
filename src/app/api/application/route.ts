@@ -5,7 +5,7 @@ import {
   sheetReadApplications,
   sheetAppendApplication,
 } from "@/lib/sheets";
-import { parseCustomFields } from "@/lib/utils";
+import { parseCustomFields, parseDateFromSheet } from "@/lib/utils";
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     if (!tenant?.sheetId) {
       return NextResponse.json([]);
     }
-    const applications = await sheetReadApplications(tenant.sheetId);
+    const applications = await sheetReadApplications(tenant.sheetId, scheduleItemId ?? undefined);
     const schedules = await sheetReadSchedules(tenant.sheetId);
     const scheduleMap = new Map(schedules.map((s) => [s.id, s]));
 
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const applications = await sheetReadApplications(tenant.sheetId);
+    const applications = await sheetReadApplications(tenant.sheetId, scheduleItemId);
     const slotCount = applications.filter(
       (a) => (a.일정ID ?? "") === scheduleItemId && (a.날짜 ?? "").slice(0, 10) === slotDate && (a.시간 ?? "") === slotTimeLabel
     ).length;
@@ -99,10 +99,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "선택한 일시는 마감되었습니다." }, { status: 400 });
     }
     const now = new Date();
-    if (schedule.applyFrom && now < new Date(schedule.applyFrom)) {
+    const applyFromDate = parseDateFromSheet(schedule.applyFrom);
+    if (applyFromDate != null && now < applyFromDate) {
       return NextResponse.json({ error: "아직 신청 가능 시간이 아닙니다." }, { status: 400 });
     }
-    if (schedule.applyUntil && now > new Date(schedule.applyUntil)) {
+    const applyUntilDate = parseDateFromSheet(schedule.applyUntil);
+    if (applyUntilDate != null && now > applyUntilDate) {
       return NextResponse.json({ error: "해당 일정의 신청 기간이 마감되었습니다." }, { status: 400 });
     }
 
@@ -131,7 +133,7 @@ export async function POST(request: NextRequest) {
       new Date().toISOString(),
       ...fields.map((f) => toSingleValue(data[f.id])),
     ];
-    await sheetAppendApplication(tenant.sheetId, headers, row);
+    await sheetAppendApplication(tenant.sheetId, scheduleItemId, headers, row);
 
     return NextResponse.json({ success: true, id: scheduleItemId + "_" + Date.now() });
   } catch (e) {
