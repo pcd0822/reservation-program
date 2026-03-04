@@ -208,6 +208,7 @@ export async function sheetReadSchedules(sheetId: string): Promise<
   {
     id: string;
     title: string;
+    groupTitle?: string | null;
     type: string;
     dateStart: string;
     dateEnd: string;
@@ -225,7 +226,7 @@ export async function sheetReadSchedules(sheetId: string): Promise<
   try {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: `'${SCHEDULE_SHEET_NAME}'!A2:K`,
+      range: `'${SCHEDULE_SHEET_NAME}'!A2:L`,
     });
     rows = (res.data.values ?? []) as string[][];
   } catch {
@@ -253,9 +254,11 @@ export async function sheetReadSchedules(sheetId: string): Promise<
       const customFields = hasApplyFrom ? (r[9] ?? "[]") : (r[8] ?? "[]");
       const slotsJson = hasApplyFrom ? r[10] : r[9];
       const slots = parseSlots(slotsJson, dateStart, timeLabel);
+      const groupTitle = r[11] != null && String(r[11]).trim() !== "" ? String(r[11]).trim() : null;
       return {
         id: r[0] ?? "",
         title: r[1] ?? "",
+        groupTitle: groupTitle ?? undefined,
         type: r[2] ?? "day",
         dateStart,
         dateEnd: r[4] ?? "",
@@ -274,6 +277,7 @@ export async function sheetAppendSchedule(
   row: {
     id: string;
     title: string;
+    groupTitle?: string | null;
     type: string;
     dateStart: string;
     dateEnd: string;
@@ -311,6 +315,7 @@ export async function sheetAppendSchedule(
           row.applyFrom ?? "",
           row.customFields,
           slotsJson,
+          row.groupTitle ?? "",
         ],
       ],
     },
@@ -322,6 +327,7 @@ export async function sheetUpdateSchedule(
   scheduleId: string,
   row: {
     title: string;
+    groupTitle?: string | null;
     type: string;
     dateStart: string;
     dateEnd: string;
@@ -337,7 +343,7 @@ export async function sheetUpdateSchedule(
   const sheets = google.sheets({ version: "v4", auth });
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: `'${SCHEDULE_SHEET_NAME}'!A2:K`,
+    range: `'${SCHEDULE_SHEET_NAME}'!A2:L`,
   });
   const rows = (res.data.values ?? []) as string[][];
   const rowIndex = rows.findIndex((r) => r[0] === scheduleId);
@@ -346,7 +352,7 @@ export async function sheetUpdateSchedule(
     row.slots && row.slots.length > 0
       ? JSON.stringify(row.slots.map((s) => ({ date: s.date.slice(0, 10), timeLabel: s.timeLabel ?? "" })))
       : "";
-  const range = `'${SCHEDULE_SHEET_NAME}'!B${rowIndex + 2}:K${rowIndex + 2}`;
+  const range = `'${SCHEDULE_SHEET_NAME}'!B${rowIndex + 2}:L${rowIndex + 2}`;
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
     range,
@@ -364,6 +370,7 @@ export async function sheetUpdateSchedule(
           row.applyFrom ?? "",
           row.customFields,
           slotsJson,
+          row.groupTitle ?? "",
         ],
       ],
     },

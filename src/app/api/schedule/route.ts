@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
     const {
       tenantId,
       title,
+      groupTitle,
       type,
       dateStart,
       dateEnd,
@@ -72,6 +73,7 @@ export async function POST(request: NextRequest) {
     } = body as {
       tenantId: string;
       title: string;
+      groupTitle?: string | null;
       type: "week" | "day" | "time";
       dateStart: string;
       dateEnd: string;
@@ -110,6 +112,7 @@ export async function POST(request: NextRequest) {
     await sheetAppendSchedule(tenant.sheetId, {
       id,
       title: title.trim(),
+      groupTitle: groupTitle != null && String(groupTitle).trim() !== "" ? String(groupTitle).trim() : undefined,
       type,
       dateStart: String(dateStart),
       dateEnd: String(dateEnd),
@@ -148,6 +151,7 @@ export async function PATCH(request: NextRequest) {
       id,
       tenantId,
       title,
+      groupTitle,
       type,
       dateStart,
       dateEnd,
@@ -161,6 +165,7 @@ export async function PATCH(request: NextRequest) {
       id: string;
       tenantId: string;
       title: string;
+      groupTitle?: string | null;
       type: "week" | "day" | "time";
       dateStart: string;
       dateEnd: string;
@@ -197,6 +202,7 @@ export async function PATCH(request: NextRequest) {
 
     await sheetUpdateSchedule(tenant.sheetId, id, {
       title: title.trim(),
+      groupTitle: groupTitle != null && String(groupTitle).trim() !== "" ? String(groupTitle).trim() : undefined,
       type,
       dateStart: String(dateStart),
       dateEnd: String(dateEnd),

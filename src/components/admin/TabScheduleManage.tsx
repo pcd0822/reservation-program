@@ -7,6 +7,7 @@ type ScheduleSlot = { date: string; timeLabel?: string };
 type ScheduleItem = {
   id: string;
   title: string;
+  groupTitle?: string | null;
   type: string;
   dateStart: string;
   dateEnd: string;
@@ -105,7 +106,7 @@ export function TabScheduleManage({ tenantId, onEditGroup }: Props) {
               key={group.key}
               className="rounded-2xl border-2 border-pastel-lavender bg-white/80 p-4 flex flex-wrap items-center justify-between gap-2"
             >
-              <p className="font-medium text-gray-800 truncate flex-1 min-w-0">{rep.title}</p>
+              <p className="font-medium text-gray-800 truncate flex-1 min-w-0">{rep.groupTitle?.trim() || rep.title}</p>
               <div className="flex gap-1 shrink-0">
                 <button
                   type="button"

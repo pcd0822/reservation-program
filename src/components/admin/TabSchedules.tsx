@@ -15,6 +15,7 @@ type SlotRow = { date: string; timeLabel: string };
 export type EditGroupItem = {
   id: string;
   title: string;
+  groupTitle?: string | null;
   type: string;
   dateStart: string;
   dateEnd: string;
@@ -197,7 +198,7 @@ export function TabSchedules({ tenantId, editGroup, onClearEdit }: Props) {
         ? first.slots.map((x) => ({ date: (x.date ?? "").slice(0, 10), timeLabel: x.timeLabel ?? "" }))
         : [{ date: (first.dateStart ?? "").slice(0, 10), timeLabel: first.timeLabel ?? "" }];
     setStep("form");
-    setTitle(first.title ?? "");
+    setTitle((first.groupTitle ?? first.title ?? "").trim() || "");
     setSameSlotTitles(editGroup.items.map((i) => i.title ?? ""));
     setType((first.type as ScheduleType) || "day");
     setDateStart((first.dateStart ?? "").slice(0, 10));
@@ -237,8 +238,8 @@ export function TabSchedules({ tenantId, editGroup, onClearEdit }: Props) {
             ? slotsToSend.map((s) => ({ date: s.date.slice(0, 10), timeLabel: (type === "time" ? s.timeLabel : "") || "" }))
             : undefined;
         const titles = sameSlotTitles.map((t) => t.trim()).filter(Boolean);
-        let toUpdate = titles.length >= 1 ? titles : [title || "일정"];
-        if (toUpdate.length > 0) toUpdate = [(title || "").trim() || toUpdate[0], ...toUpdate.slice(1)];
+        const toUpdate = titles.length >= 1 ? titles : [title || "일정"];
+        const groupTitleValue = (title || "").trim() || null;
         for (let i = 0; i < editGroup.items.length; i++) {
           const item = editGroup.items[i];
           const t = toUpdate[i] ?? toUpdate[0] ?? item.title;
@@ -249,6 +250,7 @@ export function TabSchedules({ tenantId, editGroup, onClearEdit }: Props) {
               id: item.id,
               tenantId,
               title: t,
+              groupTitle: i === 0 ? groupTitleValue : "",
               type,
               dateStart: dateS.toISOString(),
               dateEnd: dateE.toISOString(),
@@ -311,13 +313,16 @@ export function TabSchedules({ tenantId, editGroup, onClearEdit }: Props) {
           : undefined;
 
       let lastCreatedId: string | null = null;
-      for (const t of toCreate) {
+      const groupTitleForCreate = (title || "").trim() || null;
+      for (let idx = 0; idx < toCreate.length; idx++) {
+        const t = toCreate[idx];
         const res = await fetch("/api/schedule", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             tenantId,
             title: t,
+            groupTitle: idx === 0 ? groupTitleForCreate : undefined,
             type,
             dateStart: dateS.toISOString(),
             dateEnd: dateE.toISOString(),
