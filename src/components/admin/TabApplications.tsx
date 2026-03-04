@@ -174,7 +174,7 @@ export function TabApplications({ tenantId }: Props) {
     return list;
   }, [schedules, statusFilter, searchQuery]);
 
-  const slotKey = (date: string, timeLabel: string) => `${(date || "").slice(0, 10)}_${timeLabel ?? ""}`;
+  const slotKeyForCounts = (date: string, timeLabel: string) => `${(date || "").slice(0, 10)}_${timeLabel ?? ""}`;
 
   type CalendarItemStatus = "예정" | "진행중" | "마감";
   const calendarDayData = useMemo(() => {
@@ -186,7 +186,7 @@ export function TabApplications({ tenantId }: Props) {
         slots.forEach((slot) => {
           const d = slot.date?.slice(0, 10);
           if (!d) return;
-          const cnt = s.slotCounts![slotKey(slot.date ?? "", slot.timeLabel ?? "")] ?? 0;
+          const cnt = s.slotCounts![slotKeyForCounts(slot.date ?? "", slot.timeLabel ?? "")] ?? 0;
           if (!byDate[d]) byDate[d] = [];
           byDate[d].push({ scheduleId: s.id, title: s.title, count: cnt, maxCapacity: s.maxCapacity, status });
         });
