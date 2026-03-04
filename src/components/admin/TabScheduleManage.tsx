@@ -104,6 +104,8 @@ export function TabScheduleManage({ tenantId }: Props) {
   const getScheduleStatus = (s: ScheduleItem): "예정" | "진행중" | "마감" =>
     isClosed(s) ? "마감" : isUpcoming(s) ? "예정" : "진행중";
 
+  const slotKey = (date: string, timeLabel: string) => `${(date || "").slice(0, 10)}_${timeLabel ?? ""}`;
+
   const formatDateRange = (s: ScheduleItem): string => {
     const slots = s.slots;
     if (slots && slots.length > 1) {
@@ -121,6 +123,21 @@ export function TabScheduleManage({ tenantId }: Props) {
       return `${format(new Date(start), "M.d (EEE)", { locale: ko })}~${format(new Date(end), "M.d (EEE)", { locale: ko })}`;
     }
     return format(new Date(start || end || 0), "M.d (EEE)", { locale: ko });
+  };
+
+  const formatSlotBreakdown = (item: ScheduleItem): string | null => {
+    const slots = item.slots && item.slots.length > 1 ? item.slots : null;
+    const counts = item.slotCounts;
+    if (!slots || !counts || typeof counts !== "object") return null;
+    const parts = slots
+      .map((slot) => {
+        const key = slotKey(slot.date ?? "", slot.timeLabel ?? "");
+        const n = counts[key] ?? 0;
+        const label = format(new Date(slot.date), "M/d", { locale: ko });
+        const time = slot.timeLabel ? ` ${slot.timeLabel}` : "";
+        return `${label}${time} ${n}/${item.maxCapacity}`;
+      });
+    return "날짜별: " + parts.join(", ");
   };
 
   const groupedList = useMemo(() => {
@@ -359,7 +376,7 @@ export function TabScheduleManage({ tenantId }: Props) {
     <div className="card-soft p-6 md:p-8 space-y-6">
       <h2 className="text-xl font-bold text-gray-800">일정 관리</h2>
       <p className="text-sm text-gray-600">
-        만들어진 일정 목록이에요. 구글 시트에는 일정별 신청 데이터가 계속 누적 저장돼요. 수정 후에는 신청 링크를 재생성·재공유해 주세요.
+        만들어진 일정 목록이에요. 같은 일정에 여러 역할이면 한 카드로 묶여요. 역할·날짜마다 신청이 독립적으로 집계돼요 (한 날짜에서 신청해도 다른 날짜에는 반영되지 않아요). 수정 후에는 신청 링크를 재생성·재공유해 주세요.
       </p>
 
       <ul className="space-y-3">
@@ -420,7 +437,13 @@ export function TabScheduleManage({ tenantId }: Props) {
                       </p>
                       <p className="text-xs text-gray-500 mt-0.5">
                         신청 {getScheduleCount(item)}/{item.maxCapacity}명
+                        {formatSlotBreakdown(item) && " (합계)"}
                       </p>
+                      {formatSlotBreakdown(item) && (
+                        <p className="text-xs text-gray-600 mt-0.5">
+                          {formatSlotBreakdown(item)}
+                        </p>
+                      )}
                     </div>
                     <div className="flex gap-1 shrink-0">
                       <button
