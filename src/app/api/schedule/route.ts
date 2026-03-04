@@ -13,20 +13,24 @@ import { generateToken } from "@/lib/utils";
 export async function GET(request: NextRequest) {
   try {
     const tenantId = request.nextUrl.searchParams.get("tenantId");
+    const scheduleId = request.nextUrl.searchParams.get("scheduleId");
     if (!tenantId) {
       return NextResponse.json({ error: "tenantId required" }, { status: 400 });
     }
     const tenant = await registryGetTenant(tenantId);
     if (!tenant?.sheetId) {
-      return NextResponse.json([]);
+      return NextResponse.json(scheduleId ? { schedules: [], serverTime: new Date().toISOString() } : []);
     }
-    const schedules = await sheetReadSchedules(tenant.sheetId);
+    let schedules = await sheetReadSchedules(tenant.sheetId);
+    if (scheduleId && scheduleId.trim()) {
+      schedules = schedules.filter((s) => s.id === scheduleId.trim());
+    }
     const applications = await sheetReadApplications(tenant.sheetId);
     const slotKey = (date: string, time: string) => `${(date || "").slice(0, 10)}_${time ?? ""}`;
     const countByScheduleSlot = new Map<string, number>();
     applications.forEach((a) => {
-      const scheduleId = a.일정ID ?? "";
-      const key = `${scheduleId}|${slotKey(a.날짜 ?? "", a.시간 ?? "")}`;
+      const sid = a.일정ID ?? "";
+      const key = `${sid}|${slotKey(a.날짜 ?? "", a.시간 ?? "")}`;
       countByScheduleSlot.set(key, (countByScheduleSlot.get(key) ?? 0) + 1);
     });
     const list = schedules

@@ -40,13 +40,12 @@ export default function StudentSchedulePage() {
 
   useEffect(() => {
     if (!tenantId || !scheduleId) return;
-    fetch(`/api/schedule?tenantId=${tenantId}`)
+    fetch(`/api/schedule?tenantId=${tenantId}&scheduleId=${encodeURIComponent(scheduleId)}`)
       .then((r) => r.json())
       .then((data) => {
         const arr = Array.isArray(data) ? data : data?.schedules ?? [];
         const list = Array.isArray(arr) ? arr : [];
-        const one = list.filter((s: ScheduleItem) => s.id === scheduleId);
-        setSchedules(one);
+        setSchedules(list);
         setServerTime(data?.serverTime ? new Date(data.serverTime) : null);
       })
       .catch(() => {
