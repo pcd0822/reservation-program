@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { TabSheet } from "@/components/admin/TabSheet";
-import { TabSchedules } from "@/components/admin/TabSchedules";
+import { TabSchedules, type EditGroup } from "@/components/admin/TabSchedules";
 import { TabApplications } from "@/components/admin/TabApplications";
 import { TabScheduleManage } from "@/components/admin/TabScheduleManage";
 
@@ -17,7 +17,7 @@ export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("sheet");
   const [tenant, setTenant] = useState<{ id: string; sheetId: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [editGroup, setEditGroup] = useState<{ key: string; items: unknown[] } | null>(null);
+  const [editGroup, setEditGroup] = useState<EditGroup | null>(null);
 
   const [apiError, setApiError] = useState<string | null>(null);
 

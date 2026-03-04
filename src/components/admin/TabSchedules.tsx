@@ -12,7 +12,7 @@ type ScheduleType = "week" | "day" | "time";
 
 type SlotRow = { date: string; timeLabel: string };
 
-type EditGroupItem = {
+export type EditGroupItem = {
   id: string;
   title: string;
   type: string;
@@ -26,9 +26,11 @@ type EditGroupItem = {
   slots?: { date: string; timeLabel?: string }[];
 };
 
+export type EditGroup = { key: string; items: EditGroupItem[] };
+
 type Props = {
   tenantId: string;
-  editGroup?: { key: string; items: EditGroupItem[] } | null;
+  editGroup?: EditGroup | null;
   onClearEdit?: () => void;
 };
 
