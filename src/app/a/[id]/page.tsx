@@ -17,6 +17,7 @@ export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("sheet");
   const [tenant, setTenant] = useState<{ id: string; sheetId: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editGroup, setEditGroup] = useState<{ key: string; items: unknown[] } | null>(null);
 
   const [apiError, setApiError] = useState<string | null>(null);
 
@@ -121,9 +122,23 @@ export default function AdminPage() {
         {tab === "sheet" && (
           <TabSheet tenantId={tenant.id} sheetId={tenant.sheetId} onConnected={() => fetch(`/api/tenant?id=${id}`).then(r=>r.json()).then(d=> setTenant(d))} />
         )}
-        {tab === "schedules" && <TabSchedules tenantId={tenant.id} />}
+        {tab === "schedules" && (
+          <TabSchedules
+            tenantId={tenant.id}
+            editGroup={editGroup}
+            onClearEdit={() => setEditGroup(null)}
+          />
+        )}
         {tab === "applications" && <TabApplications tenantId={tenant.id} />}
-        {tab === "manage" && <TabScheduleManage tenantId={tenant.id} />}
+        {tab === "manage" && (
+          <TabScheduleManage
+            tenantId={tenant.id}
+            onEditGroup={(group) => {
+              setTab("schedules");
+              setEditGroup(group);
+            }}
+          />
+        )}
       </div>
     </main>
   );

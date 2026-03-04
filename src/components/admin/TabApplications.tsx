@@ -83,10 +83,6 @@ export function TabApplications({ tenantId }: Props) {
     if (!loading) setLoading(false);
   }, [schedules, applications]);
 
-  useEffect(() => {
-    setSelectedSlotKey(null);
-  }, [selectedItemId]);
-
   const selectedSchedule = selectedItemId ? schedules.find((s) => s.id === selectedItemId) : null;
   const slotKey = (date: string, timeLabel: string) =>
     `${(date || "").slice(0, 10)}_${timeLabel ?? ""}`;
@@ -174,11 +170,46 @@ export function TabApplications({ tenantId }: Props) {
     return list;
   }, [schedules, statusFilter, searchQuery]);
 
+  type ScheduleSlotItem = {
+    scheduleId: string;
+    scheduleTitle: string;
+    slotKey: string;
+    slotDate: string;
+    slotTimeLabel: string;
+    count: number;
+    maxCapacity: number;
+    status: "예정" | "진행중" | "마감";
+  };
+  const scheduleSlotList = useMemo(() => {
+    const skFn = (date: string, timeLabel: string) => `${(date || "").slice(0, 10)}_${timeLabel ?? ""}`;
+    const out: ScheduleSlotItem[] = [];
+    filteredSchedules.forEach((s) => {
+      const slots = s.slots && s.slots.length > 0 ? s.slots : [{ date: s.dateStart?.slice(0, 10) ?? "", timeLabel: s.timeLabel ?? "" }];
+      const status = getScheduleStatus(s);
+      slots.forEach((slot) => {
+        const sk = skFn(slot.date ?? "", slot.timeLabel ?? "");
+        const count = s.slotCounts?.[sk] ?? 0;
+        out.push({
+          scheduleId: s.id,
+          scheduleTitle: s.title,
+          slotKey: sk,
+          slotDate: slot.date ?? "",
+          slotTimeLabel: slot.timeLabel ?? "",
+          count,
+          maxCapacity: s.maxCapacity,
+          status,
+        });
+      });
+    });
+    return out;
+  }, [filteredSchedules]);
+
   const slotKeyForCounts = (date: string, timeLabel: string) => `${(date || "").slice(0, 10)}_${timeLabel ?? ""}`;
 
   type CalendarItemStatus = "예정" | "진행중" | "마감";
   const calendarDayData = useMemo(() => {
-    const byDate: Record<string, { scheduleId: string; title: string; count: number; maxCapacity: number; status: CalendarItemStatus }[]> = {};
+    const skFn = (date: string, timeLabel: string) => `${(date || "").slice(0, 10)}_${timeLabel ?? ""}`;
+    const byDate: Record<string, { scheduleId: string; slotKey: string; title: string; count: number; maxCapacity: number; status: CalendarItemStatus }[]> = {};
     filteredSchedules.forEach((s) => {
       const status = getScheduleStatus(s);
       const slots = s.slots && s.slots.length > 0 ? s.slots : [{ date: s.dateStart?.slice(0, 10) ?? "", timeLabel: s.timeLabel ?? "" }];
@@ -186,16 +217,18 @@ export function TabApplications({ tenantId }: Props) {
         slots.forEach((slot) => {
           const d = slot.date?.slice(0, 10);
           if (!d) return;
-          const cnt = s.slotCounts![slotKeyForCounts(slot.date ?? "", slot.timeLabel ?? "")] ?? 0;
+          const sk = skFn(slot.date ?? "", slot.timeLabel ?? "");
+          const cnt = s.slotCounts![sk] ?? 0;
           if (!byDate[d]) byDate[d] = [];
-          byDate[d].push({ scheduleId: s.id, title: s.title, count: cnt, maxCapacity: s.maxCapacity, status });
+          byDate[d].push({ scheduleId: s.id, slotKey: sk, title: s.title, count: cnt, maxCapacity: s.maxCapacity, status });
         });
       } else {
         const d = (s.dateStart ?? "").slice(0, 10);
         if (!d) return;
+        const sk = skFn(d, s.timeLabel ?? "");
         const cnt = getScheduleCount(s);
         if (!byDate[d]) byDate[d] = [];
-        byDate[d].push({ scheduleId: s.id, title: s.title, count: cnt, maxCapacity: s.maxCapacity, status });
+        byDate[d].push({ scheduleId: s.id, slotKey: sk, title: s.title, count: cnt, maxCapacity: s.maxCapacity, status });
       }
     });
     return byDate;
@@ -381,36 +414,53 @@ export function TabApplications({ tenantId }: Props) {
 
       {viewMode === "card" && (
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-        {filteredSchedules.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => setSelectedItemId(s.id === selectedItemId ? null : s.id)}
-            className={`btn-bounce rounded-2xl border-2 p-4 text-left transition-shadow hover:shadow-md ${getItemColor(s)}`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <p className="font-medium truncate flex-1 min-w-0">{s.title}</p>
-              <span
-                className={`shrink-0 rounded-lg px-2 py-0.5 text-xs font-medium ${
-                  getScheduleStatus(s) === "예정"
-                    ? "bg-pastel-sky/80 text-gray-800"
-                    : getScheduleStatus(s) === "진행중"
-                    ? "bg-pastel-mint text-gray-800"
-                    : "bg-red-200 text-red-800"
-                }`}
-              >
-                {getScheduleStatus(s)}
-              </span>
-            </div>
-            <p className="text-sm opacity-90 mt-0.5">
-              {formatDateRange(s)}
-              {s.timeLabel && !(s.slots && s.slots.length > 1) ? ` ${s.timeLabel}` : ""}
-            </p>
-            <p className="text-sm mt-1">
-              신청 <strong>{getScheduleCount(s)}</strong> / {s.maxCapacity}명
-            </p>
-          </button>
-        ))}
+        {scheduleSlotList.map((slotItem) => {
+          const isSelected = selectedItemId === slotItem.scheduleId && selectedSlotKey === slotItem.slotKey;
+          const color =
+            slotItem.status === "마감"
+              ? "bg-red-100 border-red-300 text-red-800"
+              : slotItem.status === "진행중"
+                ? "bg-pastel-mint/60 border-pastel-mint text-gray-800"
+                : "bg-pastel-sky/40 border-pastel-sky text-gray-800";
+          const slotLabel =
+            format(new Date(slotItem.slotDate), "M/d (EEE)", { locale: ko }) +
+            (slotItem.slotTimeLabel ? ` ${slotItem.slotTimeLabel}` : "");
+          return (
+            <button
+              key={`${slotItem.scheduleId}|${slotItem.slotKey}`}
+              type="button"
+              onClick={() => {
+                if (isSelected) {
+                  setSelectedItemId(null);
+                  setSelectedSlotKey(null);
+                } else {
+                  setSelectedItemId(slotItem.scheduleId);
+                  setSelectedSlotKey(slotItem.slotKey);
+                }
+              }}
+              className={`btn-bounce rounded-2xl border-2 p-4 text-left transition-shadow hover:shadow-md ${isSelected ? "ring-2 ring-pastel-pink " : ""}${color}`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-medium truncate flex-1 min-w-0">{slotItem.scheduleTitle}</p>
+                <span
+                  className={`shrink-0 rounded-lg px-2 py-0.5 text-xs font-medium ${
+                    slotItem.status === "예정"
+                      ? "bg-pastel-sky/80 text-gray-800"
+                      : slotItem.status === "진행중"
+                        ? "bg-pastel-mint text-gray-800"
+                        : "bg-red-200 text-red-800"
+                  }`}
+                >
+                  {slotItem.status}
+                </span>
+              </div>
+              <p className="text-sm opacity-90 mt-0.5">{slotLabel}</p>
+              <p className="text-sm mt-1">
+                신청 <strong>{slotItem.count}</strong> / {slotItem.maxCapacity}명
+              </p>
+            </button>
+          );
+        })}
       </div>
       )}
 
@@ -464,13 +514,22 @@ export function TabApplications({ tenantId }: Props) {
                             : item.status === "진행중"
                               ? "bg-pastel-mint/60 border-pastel-mint text-gray-800 hover:bg-pastel-mint/80"
                               : "bg-pastel-sky/40 border-pastel-sky text-gray-800 hover:bg-pastel-sky/60";
+                        const isSelected = selectedItemId === item.scheduleId && selectedSlotKey === item.slotKey;
                         return (
                           <button
-                            key={item.scheduleId + dateStr}
+                            key={item.scheduleId + item.slotKey}
                             type="button"
-                            onClick={() => setSelectedItemId(item.scheduleId === selectedItemId ? null : item.scheduleId)}
+                            onClick={() => {
+                              if (isSelected) {
+                                setSelectedItemId(null);
+                                setSelectedSlotKey(null);
+                              } else {
+                                setSelectedItemId(item.scheduleId);
+                                setSelectedSlotKey(item.slotKey);
+                              }
+                            }}
                             className={`w-full text-left rounded-lg px-1.5 py-0.5 text-xs truncate border transition-colors ${
-                              selectedItemId === item.scheduleId ? "bg-pastel-pink/50 border-pastel-pink text-gray-800 ring-1 ring-pastel-pink" : baseColor
+                              isSelected ? "bg-pastel-pink/50 border-pastel-pink text-gray-800 ring-1 ring-pastel-pink" : baseColor
                             }`}
                             title={`${item.title} · ${item.count}/${item.maxCapacity}명 · ${item.status}`}
                           >

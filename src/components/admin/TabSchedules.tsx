@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { CalendarPlus, CalendarDays } from "lucide-react";
 import { CustomFieldsEditor } from "./CustomFieldsEditor";
 import type { CustomField } from "@/lib/utils";
+import { parseCustomFields } from "@/lib/utils";
 import { startOfWeek, endOfWeek, parseISO, format, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterval, isSameMonth } from "date-fns";
 import { ko } from "date-fns/locale";
 
@@ -11,9 +12,27 @@ type ScheduleType = "week" | "day" | "time";
 
 type SlotRow = { date: string; timeLabel: string };
 
-type Props = { tenantId: string };
+type EditGroupItem = {
+  id: string;
+  title: string;
+  type: string;
+  dateStart: string;
+  dateEnd: string;
+  timeLabel: string | null;
+  maxCapacity: number;
+  applyFrom?: string | null;
+  applyUntil?: string | null;
+  customFields: string;
+  slots?: { date: string; timeLabel?: string }[];
+};
 
-export function TabSchedules({ tenantId }: Props) {
+type Props = {
+  tenantId: string;
+  editGroup?: { key: string; items: EditGroupItem[] } | null;
+  onClearEdit?: () => void;
+};
+
+export function TabSchedules({ tenantId, editGroup, onClearEdit }: Props) {
   const [step, setStep] = useState<"form" | "result">("form");
   const [type, setType] = useState<ScheduleType>("day");
   const [title, setTitle] = useState("");
@@ -168,8 +187,95 @@ export function TabSchedules({ tenantId }: Props) {
     setDtPickerFor(null);
   };
 
+  useEffect(() => {
+    if (!editGroup?.items?.length) return;
+    const first = editGroup.items[0];
+    const slotsForForm =
+      first.slots && first.slots.length > 0
+        ? first.slots.map((x) => ({ date: (x.date ?? "").slice(0, 10), timeLabel: x.timeLabel ?? "" }))
+        : [{ date: (first.dateStart ?? "").slice(0, 10), timeLabel: first.timeLabel ?? "" }];
+    setStep("form");
+    setTitle(first.title ?? "");
+    setSameSlotTitles(editGroup.items.map((i) => i.title ?? ""));
+    setType((first.type as ScheduleType) || "day");
+    setDateStart((first.dateStart ?? "").slice(0, 10));
+    setDateEnd((first.dateEnd ?? "").slice(0, 10));
+    setTimeLabel(first.timeLabel ?? "");
+    setSlots(slotsForForm.length > 0 ? slotsForForm : [{ date: "", timeLabel: "" }]);
+    setMaxCapacityStr(String(first.maxCapacity ?? 1));
+    setApplyFrom(first.applyFrom ? format(new Date(first.applyFrom), "yyyy-MM-dd'T'HH:mm") : "");
+    setApplyUntil(first.applyUntil ? format(new Date(first.applyUntil), "yyyy-MM-dd'T'HH:mm") : "");
+    setCustomFields(parseCustomFields(first.customFields));
+  }, [editGroup]);
+
   const handleCreate = async () => {
     if (!canCreate) return;
+    if (editGroup?.items?.length) {
+      setCreating(true);
+      setCreatedLinks(null);
+      try {
+        const slotsToSend = (type === "day" || type === "time") ? slots.filter((s) => s.date.trim()) : [];
+        if ((type === "day" || type === "time") && slotsToSend.length === 0) {
+          alert("최소 1개의 날짜/일시를 입력해 주세요.");
+          setCreating(false);
+          return;
+        }
+        let dateS: Date;
+        let dateE: Date;
+        if (slotsToSend.length > 0) {
+          const sorted = [...slotsToSend].sort((a, b) => a.date.localeCompare(b.date));
+          dateS = parseISO(sorted[0].date);
+          dateE = parseISO(sorted[sorted.length - 1].date);
+        } else {
+          dateS = applyFrom ? new Date(applyFrom) : new Date();
+          dateE = applyUntil ? new Date(applyUntil) : dateS;
+        }
+        const bodySlots =
+          slotsToSend.length > 0
+            ? slotsToSend.map((s) => ({ date: s.date.slice(0, 10), timeLabel: (type === "time" ? s.timeLabel : "") || "" }))
+            : undefined;
+        const titles = sameSlotTitles.map((t) => t.trim()).filter(Boolean);
+        const toUpdate = titles.length >= 1 ? titles : [title || "일정"];
+        for (let i = 0; i < editGroup.items.length; i++) {
+          const item = editGroup.items[i];
+          const t = toUpdate[i] ?? toUpdate[0] ?? item.title;
+          await fetch("/api/schedule", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: item.id,
+              tenantId,
+              title: t,
+              type,
+              dateStart: dateS.toISOString(),
+              dateEnd: dateE.toISOString(),
+              timeLabel: type === "time" && slotsToSend.length > 0 ? (slotsToSend[0]?.timeLabel ?? null) : null,
+              maxCapacity,
+              applyFrom: applyFrom ? new Date(applyFrom).toISOString() : null,
+              applyUntil: applyUntil ? new Date(applyUntil).toISOString() : null,
+              customFields: JSON.stringify(customFields),
+              slots: bodySlots,
+            }),
+          });
+        }
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const studentUrl =
+          editGroup.items.length === 1
+            ? `${origin}/s/${tenantId}/${editGroup.items[0].id}`
+            : `${origin}/s/${tenantId}`;
+        const QRCode = (await import("qrcode")).default;
+        const qrDataUrl = await QRCode.toDataURL(studentUrl, { width: 256, margin: 2 });
+        setCreatedLinks({ studentUrl, qrDataUrl });
+        setStep("result");
+        onClearEdit?.();
+      } catch (e) {
+        console.error(e);
+        alert("수정 중 오류가 났어요.");
+      } finally {
+        setCreating(false);
+      }
+      return;
+    }
     const toCreate = titlesToCreate.length >= 1 ? titlesToCreate : [title || "일정"];
     if (toCreate.length > 1) {
       const ok = window.confirm(
@@ -664,7 +770,7 @@ export function TabSchedules({ tenantId }: Props) {
         disabled={creating || !canCreate}
         className="btn-bounce w-full rounded-2xl bg-pastel-pink py-3 font-medium text-gray-800 shadow-md hover:shadow-lg disabled:opacity-70"
       >
-        {creating ? "만드는 중…" : "일정 생성 완료 → 링크 & QR 만들기"}
+        {creating ? (editGroup?.items?.length ? "저장 중…" : "만드는 중…") : (editGroup?.items?.length ? "저장" : "일정 생성 완료 → 링크 & QR 만들기")}
       </button>
     </div>
   );
