@@ -26,18 +26,32 @@ export async function GET(request: NextRequest) {
       schedules = schedules.filter((s) => s.id === scheduleId.trim());
     }
     const applications = await sheetReadApplications(tenant.sheetId);
+    const toNormalizedDate = (val: string | undefined): string => {
+      if (val == null || val === "") return "";
+      const s = String(val).trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+      const n = Number(s);
+      if (Number.isFinite(n) && n > 0) {
+        const d = n > 1e12 ? new Date(n) : new Date((n - 25569) * 86400 * 1000);
+        if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+      }
+      const d = new Date(s);
+      return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+    };
     const slotKey = (date: string, time: string) => `${(date || "").slice(0, 10)}_${time ?? ""}`;
     const countByScheduleSlot = new Map<string, number>();
     applications.forEach((a) => {
       const sid = a.일정ID ?? "";
-      const key = `${sid}|${slotKey(a.날짜 ?? "", a.시간 ?? "")}`;
+      const normDate = toNormalizedDate(a.날짜 ?? "");
+      const key = `${sid}|${slotKey(normDate, a.시간 ?? "")}`;
       countByScheduleSlot.set(key, (countByScheduleSlot.get(key) ?? 0) + 1);
     });
     const list = schedules
       .map((s) => {
         const slotCounts: Record<string, number> = {};
         (s.slots ?? []).forEach((slot) => {
-          const key = slotKey(slot.date, slot.timeLabel);
+          const slotNormDate = (slot.date ?? "").slice(0, 10);
+          const key = slotKey(slotNormDate, slot.timeLabel ?? "");
           slotCounts[key] = countByScheduleSlot.get(`${s.id}|${key}`) ?? 0;
         });
         return {

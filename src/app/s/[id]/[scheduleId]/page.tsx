@@ -55,9 +55,10 @@ export default function StudentSchedulePage() {
   }, [tenantId, scheduleId]);
 
   const getSlotCount = (s: ScheduleItem, slot: SlotOption) => {
-    if (s.slotCounts) return s.slotCounts[slotKey(slot.date, slot.timeLabel)] ?? 0;
-    if ((s.slots?.length ?? 0) <= 1) return s._count?.applications ?? 0;
-    return s.slotCounts?.[slotKey(slot.date, slot.timeLabel)] ?? 0;
+    const key = slotKey((slot.date ?? "").slice(0, 10), slot.timeLabel ?? "");
+    if ((s.slots?.length ?? 0) > 1) return s.slotCounts?.[key] ?? 0;
+    if (s.slotCounts) return s.slotCounts[key] ?? 0;
+    return s._count?.applications ?? 0;
   };
   const now = serverTime ?? new Date();
   const isSlotNotYetOpen = (s: ScheduleItem) => {
