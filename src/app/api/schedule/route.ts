@@ -40,6 +40,16 @@ export async function GET(request: NextRequest) {
     };
     const slotKey = (date: string, time: string) =>
       `${toNormalizedDate(date || "").slice(0, 10)}_${time ?? ""}`;
+    const expandDateRange = (dateStart: string, dateEnd: string): string[] => {
+      const dStart = toNormalizedDate(dateStart).slice(0, 10);
+      const dEnd = toNormalizedDate(dateEnd).slice(0, 10);
+      if (!dStart || !dEnd || dEnd < dStart) return [];
+      const out: string[] = [];
+      const startMs = new Date(dStart + "T12:00:00Z").getTime();
+      const endMs = new Date(dEnd + "T12:00:00Z").getTime();
+      for (let t = startMs; t <= endMs; t += 86400000) out.push(new Date(t).toISOString().slice(0, 10));
+      return out;
+    };
     const countByScheduleSlot = new Map<string, number>();
     applications.forEach((a) => {
       const sid = a.일정ID ?? "";
@@ -49,8 +59,13 @@ export async function GET(request: NextRequest) {
     });
     const list = schedules
       .map((s) => {
+        let slots = s.slots ?? [];
+        if (slots.length <= 1 && s.dateStart && s.dateEnd) {
+          const expanded = expandDateRange(s.dateStart, s.dateEnd);
+          if (expanded.length > 1)
+            slots = expanded.map((date) => ({ date, timeLabel: s.timeLabel ?? "" }));
+        }
         const slotCounts: Record<string, number> = {};
-        const slots = s.slots ?? [];
         slots.forEach((slot) => {
           const slotNormDate = toNormalizedDate(slot.date ?? "");
           const key = slotKey(slotNormDate, slot.timeLabel ?? "");
@@ -59,6 +74,7 @@ export async function GET(request: NextRequest) {
         const totalForSchedule = applications.filter((a) => a.일정ID === s.id).length;
         return {
           ...s,
+          slots,
           _count: slots.length > 0 ? undefined : { applications: totalForSchedule },
           slotCounts: slots.length > 0 ? slotCounts : {},
         };

@@ -58,10 +58,10 @@ export default function StudentPage() {
       .catch(() => setSchedules([]));
   }, [tenantId]);
 
-  const getSlotCount = (s: ScheduleItem, slot: SlotOption) => {
+  /** displaySlotsLength: 실제로 표시 중인 슬롯 개수. 2개 이상이면 무조건 slotCounts만 사용(날짜별 마감). */
+  const getSlotCount = (s: ScheduleItem, slot: SlotOption, displaySlotsLength: number) => {
     const key = slotKey(slot.date ?? "", slot.timeLabel ?? "");
-    const multiSlot = (s.slots?.length ?? 0) > 1;
-    if (multiSlot) return (s.slotCounts ?? {})[key] ?? 0;
+    if (displaySlotsLength > 1) return (s.slotCounts ?? {})[key] ?? 0;
     if (s.slotCounts && key in (s.slotCounts ?? {})) return s.slotCounts![key] ?? 0;
     return s._count?.applications ?? 0;
   };
@@ -70,9 +70,9 @@ export default function StudentPage() {
     const from = parseDateFromSheet(s.applyFrom);
     return from != null && now < from;
   };
-  const isSlotClosed = (s: ScheduleItem, slot: SlotOption) => {
+  const isSlotClosed = (s: ScheduleItem, slot: SlotOption, displaySlotsLength: number) => {
     if (isSlotNotYetOpen(s)) return { closed: true, reason: "아직 신청 가능 시간이 아님" as const };
-    const count = getSlotCount(s, slot);
+    const count = getSlotCount(s, slot, displaySlotsLength);
     if (count >= s.maxCapacity) return { closed: true, reason: "인원 마감" as const };
     const until = parseDateFromSheet(s.applyUntil);
     if (until != null && now > until) return { closed: true, reason: "신청 기간 마감" as const };
@@ -109,7 +109,8 @@ export default function StudentPage() {
       setMessage({ type: "err", text: err });
       return;
     }
-    const closed = isSlotClosed(s, slot);
+    const effectiveSlots = s.slots && s.slots.length > 0 ? s.slots : [{ date: s.dateStart.slice(0, 10), timeLabel: s.timeLabel ?? "" }];
+    const closed = isSlotClosed(s, slot, effectiveSlots.length);
     if (closed.closed) {
       setMessage({ type: "err", text: `선택한 일시가 ${closed.reason}되었어요.` });
       return;
@@ -172,7 +173,7 @@ export default function StudentPage() {
             {schedules.map((s) => {
               const slots = (s.slots && s.slots.length > 0 ? s.slots : [{ date: s.dateStart.slice(0, 10), timeLabel: s.timeLabel ?? "" }]) as SlotOption[];
               const selectedSlot = getEffectiveSlot(s);
-              const closed = selectedSlot ? isSlotClosed(s, selectedSlot) : { closed: false as const, reason: null };
+              const closed = selectedSlot ? isSlotClosed(s, selectedSlot, slots.length) : { closed: false as const, reason: null };
               const fields = parseCustomFields(s.customFields);
               const formData = formDataBySchedule[s.id] ?? {};
               const canApply = selectedSlot && !closed.closed && !submitting;
@@ -251,8 +252,8 @@ export default function StudentPage() {
                         <p className="text-xs text-gray-600 font-medium mb-1.5">신청할 일시 선택</p>
                         <div className="flex flex-wrap gap-2">
                           {slots.map((slot) => {
-                            const slotClosed = isSlotClosed(s, slot);
-                            const count = getSlotCount(s, slot);
+                            const slotClosed = isSlotClosed(s, slot, slots.length);
+                            const count = getSlotCount(s, slot, slots.length);
                             const isSelected = selectedSlot?.date === slot.date && selectedSlot?.timeLabel === slot.timeLabel;
                             return (
                               <button
@@ -284,7 +285,7 @@ export default function StudentPage() {
                         {format(new Date(slots[0].date), "yyyy년 M월 d일 (EEE)", { locale: ko })}
                         {slots[0].timeLabel ? ` ${slots[0].timeLabel}` : ""}
                         <span className="ml-1 text-gray-500">
-                          · 신청 {getSlotCount(s, slots[0])}/{s.maxCapacity}명
+                          · 신청 {getSlotCount(s, slots[0], slots.length)}/{s.maxCapacity}명
                           {closed.closed && <span className="text-red-600 font-bold"> · {closed.reason}</span>}
                         </span>
                       </p>
