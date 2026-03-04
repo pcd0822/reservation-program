@@ -49,15 +49,17 @@ export async function GET(request: NextRequest) {
     const list = schedules
       .map((s) => {
         const slotCounts: Record<string, number> = {};
-        (s.slots ?? []).forEach((slot) => {
-          const slotNormDate = (slot.date ?? "").slice(0, 10);
+        const slots = s.slots ?? [];
+        slots.forEach((slot) => {
+          const slotNormDate = toNormalizedDate(slot.date ?? "");
           const key = slotKey(slotNormDate, slot.timeLabel ?? "");
           slotCounts[key] = countByScheduleSlot.get(`${s.id}|${key}`) ?? 0;
         });
+        const totalForSchedule = applications.filter((a) => a.일정ID === s.id).length;
         return {
           ...s,
-          _count: { applications: (s.slots ?? []).length > 0 ? undefined : applications.filter((a) => a.일정ID === s.id).length },
-          slotCounts: (s.slots ?? []).length > 0 ? slotCounts : undefined,
+          _count: slots.length > 0 ? undefined : { applications: totalForSchedule },
+          slotCounts: slots.length > 0 ? slotCounts : undefined,
         };
       })
       .sort((a, b) => new Date(a.dateStart).getTime() - new Date(b.dateStart).getTime());

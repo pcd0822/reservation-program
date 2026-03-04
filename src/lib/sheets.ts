@@ -183,23 +183,31 @@ async function ensureScheduleTab(sheetId: string): Promise<void> {
 
 export type ScheduleSlot = { date: string; timeLabel: string };
 
-function parseSlots(slotsJson: string | undefined, dateStart: string, timeLabel: string | null): ScheduleSlot[] {
-  if (!slotsJson?.trim()) {
-    const d = dateStart.slice(0, 10);
-    return [{ date: d, timeLabel: timeLabel ?? "" }];
+function normalizeSlotDate(val: unknown): string {
+  if (val == null || val === "") return "";
+  const s = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const n = Number(s);
+  if (Number.isFinite(n) && n > 0) {
+    const d = n > 1e12 ? new Date(n) : new Date((n - 25569) * 86400 * 1000);
+    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
   }
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+}
+
+function parseSlots(slotsJson: string | undefined, dateStart: string, timeLabel: string | null): ScheduleSlot[] {
+  const d = normalizeSlotDate(dateStart) || dateStart.slice(0, 10);
+  if (!slotsJson?.trim()) return [{ date: d, timeLabel: timeLabel ?? "" }];
   try {
     const arr = JSON.parse(slotsJson) as unknown;
-    if (!Array.isArray(arr) || arr.length === 0) {
-      const d = dateStart.slice(0, 10);
-      return [{ date: d, timeLabel: timeLabel ?? "" }];
-    }
-    return arr.map((x) => ({
-      date: String((x as { date?: string }).date ?? "").slice(0, 10),
-      timeLabel: String((x as { timeLabel?: string }).timeLabel ?? ""),
-    })).filter((s) => s.date);
+    if (!Array.isArray(arr) || arr.length === 0) return [{ date: d, timeLabel: timeLabel ?? "" }];
+    return arr.map((x) => {
+      const raw = (x as { date?: unknown }).date;
+      const date = normalizeSlotDate(raw) || String(raw ?? "").slice(0, 10);
+      return { date, timeLabel: String((x as { timeLabel?: string }).timeLabel ?? "") };
+    }).filter((s) => s.date);
   } catch {
-    const d = dateStart.slice(0, 10);
     return [{ date: d, timeLabel: timeLabel ?? "" }];
   }
 }
