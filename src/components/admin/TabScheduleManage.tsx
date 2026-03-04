@@ -48,6 +48,10 @@ export function TabScheduleManage({ tenantId }: Props) {
   } | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedLinks, setSavedLinks] = useState<{ studentUrl: string; qrDataUrl: string } | null>(null);
+  const [groupLinks, setGroupLinks] = useState<{
+    items: { id: string; title: string; studentUrl: string; qrDataUrl: string }[];
+  } | null>(null);
+  const [editRolePickerGroup, setEditRolePickerGroup] = useState<{ items: ScheduleItem[] } | null>(null);
   const [maxCapacityInput, setMaxCapacityInput] = useState("");
   const [calendarOpenForSlot, setCalendarOpenForSlot] = useState<number | null>(null);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
@@ -176,6 +180,27 @@ export function TabScheduleManage({ tenantId }: Props) {
     const QRCode = (await import("qrcode")).default;
     const qrDataUrl = await QRCode.toDataURL(studentUrl, { width: 256, margin: 2 });
     setSavedLinks({ studentUrl, qrDataUrl });
+  };
+
+  const openGroupLinkPreview = async (group: { items: ScheduleItem[] }) => {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const QRCode = (await import("qrcode")).default;
+    const items = await Promise.all(
+      group.items.map(async (item) => {
+        const studentUrl = `${origin}/s/${tenantId}/${item.id}`;
+        const qrDataUrl = await QRCode.toDataURL(studentUrl, { width: 256, margin: 2 });
+        return { id: item.id, title: item.title, studentUrl, qrDataUrl };
+      })
+    );
+    setGroupLinks({ items });
+  };
+
+  const handleDeleteGroup = async (group: { items: ScheduleItem[] }) => {
+    if (!confirm(`이 일정 전체(역할 ${group.items.length}개)를 삭제할까요? 이미 신청된 내역도 함께 삭제됩니다.`)) return;
+    for (const item of group.items) {
+      await fetch(`/api/schedule?id=${item.id}&tenantId=${tenantId}`, { method: "DELETE" });
+    }
+    setList((prev) => prev.filter((s) => !group.items.some((i) => i.id === s.id)));
   };
 
   const openEdit = (s: ScheduleItem) => {
@@ -392,7 +417,7 @@ export function TabScheduleManage({ tenantId }: Props) {
               key={group.key}
               className="rounded-2xl border-2 border-pastel-lavender bg-white/80 p-4 space-y-2"
             >
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap min-w-0">
                     <p className="font-medium text-gray-800 truncate">
@@ -424,6 +449,29 @@ export function TabScheduleManage({ tenantId }: Props) {
                     신청 {totalCount}/{totalCapacity}명 (역할 합계)
                   </p>
                 </div>
+                <div className="flex gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => openGroupLinkPreview(group)}
+                    className="btn-bounce rounded-xl bg-white border border-pastel-lavender px-2 py-1 text-xs text-gray-800 hover:bg-pastel-lavender/40"
+                  >
+                    링크 보기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditRolePickerGroup(group)}
+                    className="btn-bounce rounded-xl bg-pastel-sky px-2 py-1 text-xs text-gray-800 hover:bg-pastel-sky/80"
+                  >
+                    수정
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteGroup(group)}
+                    className="btn-bounce rounded-xl bg-red-100 px-2 py-1 text-xs text-red-700 hover:bg-red-200"
+                  >
+                    삭제
+                  </button>
+                </div>
               </div>
               <div className="space-y-1">
                 {group.items.map((item) => (
@@ -444,29 +492,6 @@ export function TabScheduleManage({ tenantId }: Props) {
                           {formatSlotBreakdown(item)}
                         </p>
                       )}
-                    </div>
-                    <div className="flex gap-1 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => openLinkPreview(item.id)}
-                        className="btn-bounce rounded-xl bg-white border border-pastel-lavender px-2 py-1 text-xs text-gray-800 hover:bg-pastel-lavender/40"
-                      >
-                        링크 보기
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openEdit(item)}
-                        className="btn-bounce rounded-xl bg-pastel-sky px-2 py-1 text-xs text-gray-800 hover:bg-pastel-sky/80"
-                      >
-                        수정
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(item.id, item.title)}
-                        className="btn-bounce rounded-xl bg-red-100 px-2 py-1 text-xs text-red-700 hover:bg-red-200"
-                      >
-                        삭제
-                      </button>
                     </div>
                   </div>
                 ))}
@@ -747,6 +772,89 @@ export function TabScheduleManage({ tenantId }: Props) {
                 취소
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {editRolePickerGroup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4">
+            <h3 className="text-lg font-bold text-gray-800">수정할 역할 선택</h3>
+            <p className="text-sm text-gray-600">어떤 역할을 수정할까요?</p>
+            <div className="space-y-1.5 max-h-60 overflow-y-auto">
+              {editRolePickerGroup.items.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    openEdit(item);
+                    setEditRolePickerGroup(null);
+                  }}
+                  className="btn-bounce w-full rounded-xl bg-gray-100 px-3 py-2 text-left text-sm font-medium text-gray-800 hover:bg-pastel-lavender/50"
+                >
+                  {item.title}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setEditRolePickerGroup(null)}
+              className="btn-bounce w-full rounded-2xl bg-pastel-lavender py-2 font-medium"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+
+      {groupLinks && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col p-6">
+            <h3 className="text-lg font-bold text-gray-800 shrink-0">역할별 신청 링크</h3>
+            <p className="text-sm text-gray-600 shrink-0 mt-1">각 역할마다 링크가 달라요. 복사·QR로 공유하세요.</p>
+            <div className="mt-4 space-y-4 overflow-y-auto flex-1 min-h-0">
+              {groupLinks.items.map((entry) => (
+                <div key={entry.id} className="rounded-2xl bg-gray-50 p-4 space-y-2">
+                  <p className="font-medium text-gray-800">{entry.title}</p>
+                  <div className="flex flex-wrap gap-2 items-start">
+                    <div className="flex-1 min-w-0">
+                      <input
+                        readOnly
+                        value={entry.studentUrl}
+                        className="w-full rounded-xl border border-pastel-lavender px-3 py-2 text-xs text-gray-800 bg-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(entry.studentUrl);
+                          alert("클립보드에 복사되었어요!");
+                        }}
+                        className="btn-bounce mt-1.5 rounded-xl bg-pastel-pink px-3 py-1.5 text-xs font-medium text-gray-800"
+                      >
+                        링크 복사
+                      </button>
+                    </div>
+                    <div className="shrink-0">
+                      <img src={entry.qrDataUrl} alt="QR" className="w-24 h-24 rounded-lg" />
+                      <a
+                        href={entry.qrDataUrl}
+                        download={`qrcode-${entry.title.replace(/[/\\*?:\[\]]/g, "_")}.png`}
+                        className="btn-bounce mt-1 block text-center rounded-lg bg-pastel-sky py-1 text-xs font-medium"
+                      >
+                        QR 저장
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setGroupLinks(null)}
+              className="btn-bounce mt-4 w-full rounded-2xl bg-pastel-lavender py-2 font-medium shrink-0"
+            >
+              확인
+            </button>
           </div>
         </div>
       )}

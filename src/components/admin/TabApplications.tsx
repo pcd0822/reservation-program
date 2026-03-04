@@ -47,6 +47,7 @@ export function TabApplications({ tenantId }: Props) {
   const [viewMode, setViewMode] = useState<"card" | "calendar">("card");
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const [filterOpen, setFilterOpen] = useState(false);
+  const [selectedSlotKey, setSelectedSlotKey] = useState<string | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
   const captureRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
@@ -82,10 +83,27 @@ export function TabApplications({ tenantId }: Props) {
     if (!loading) setLoading(false);
   }, [schedules, applications]);
 
+  useEffect(() => {
+    setSelectedSlotKey(null);
+  }, [selectedItemId]);
+
   const selectedSchedule = selectedItemId ? schedules.find((s) => s.id === selectedItemId) : null;
-  const byItem = selectedItemId
+  const slotKey = (date: string, timeLabel: string) =>
+    `${(date || "").slice(0, 10)}_${timeLabel ?? ""}`;
+  const applicationSlotKey = (a: Application) =>
+    slotKey(a.scheduleItem.dateStart || "", a.scheduleItem.timeLabel ?? "");
+  const byItemRaw = selectedItemId
     ? applications.filter((a) => a.scheduleItem.id === selectedItemId)
     : [];
+  const byItem =
+    selectedSlotKey === null
+      ? byItemRaw
+      : byItemRaw.filter((a) => applicationSlotKey(a) === selectedSlotKey);
+  const selectedScheduleSlots = selectedSchedule?.slots && selectedSchedule.slots.length > 0
+    ? selectedSchedule.slots
+    : selectedSchedule?.dateStart
+      ? [{ date: selectedSchedule.dateStart.slice(0, 10), timeLabel: selectedSchedule.timeLabel ?? "" }]
+      : [];
 
   const getScheduleCount = (s: ScheduleItem) => {
     const c = s._count?.applications;
@@ -190,14 +208,19 @@ export function TabApplications({ tenantId }: Props) {
   }, [calendarMonth]);
 
   const fields = selectedSchedule ? parseCustomFields(selectedSchedule.customFields) : [];
-  const columns = selectedSchedule ? ["신청일시", ...fields.map((f) => f.label)] : [];
+  const columns = selectedSchedule
+    ? ["신청일시", "선택한 일시", ...fields.map((f) => f.label)]
+    : [];
   const rows = byItem.map((a) => {
     let data: Record<string, string> = {};
     try {
       data = JSON.parse(a.data) as Record<string, string>;
     } catch {}
+    const chosenDate = a.scheduleItem.dateStart ? format(new Date(a.scheduleItem.dateStart), "yyyy-MM-dd (EEE)", { locale: ko }) : "";
+    const chosenTime = a.scheduleItem.timeLabel ? ` ${a.scheduleItem.timeLabel}` : "";
     return [
       format(new Date(a.createdAt), "yyyy-MM-dd HH:mm", { locale: ko }),
+      chosenDate + chosenTime,
       ...fields.map((f) => String(data[f.label] ?? "")),
     ];
   });
@@ -476,6 +499,32 @@ export function TabApplications({ tenantId }: Props) {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-bold text-gray-800">신청자 목록 · {selectedSchedule.title}</h3>
             <div className="flex flex-wrap gap-2">
+              {selectedScheduleSlots.length > 1 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs text-gray-500 mr-1">날짜별:</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSlotKey(null)}
+                    className={`rounded-lg px-2.5 py-1.5 text-xs font-medium ${selectedSlotKey === null ? "bg-pastel-pink text-gray-800" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                  >
+                    전체
+                  </button>
+                  {selectedScheduleSlots.map((slot) => {
+                    const sk = slotKey(slot.date ?? "", slot.timeLabel ?? "");
+                    const label = format(new Date(slot.date), "M/d (EEE)", { locale: ko }) + (slot.timeLabel ? ` ${slot.timeLabel}` : "");
+                    return (
+                      <button
+                        key={sk}
+                        type="button"
+                        onClick={() => setSelectedSlotKey(sk)}
+                        className={`rounded-lg px-2.5 py-1.5 text-xs font-medium whitespace-nowrap ${selectedSlotKey === sk ? "bg-pastel-pink text-gray-800" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               <button
                 type="button"
                 onClick={downloadXlsx}
