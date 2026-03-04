@@ -237,7 +237,8 @@ export function TabSchedules({ tenantId, editGroup, onClearEdit }: Props) {
             ? slotsToSend.map((s) => ({ date: s.date.slice(0, 10), timeLabel: (type === "time" ? s.timeLabel : "") || "" }))
             : undefined;
         const titles = sameSlotTitles.map((t) => t.trim()).filter(Boolean);
-        const toUpdate = titles.length >= 1 ? titles : [title || "일정"];
+        let toUpdate = titles.length >= 1 ? titles : [title || "일정"];
+        if (toUpdate.length > 0) toUpdate = [(title || "").trim() || toUpdate[0], ...toUpdate.slice(1)];
         for (let i = 0; i < editGroup.items.length; i++) {
           const item = editGroup.items[i];
           const t = toUpdate[i] ?? toUpdate[0] ?? item.title;
