@@ -38,7 +38,8 @@ export async function GET(request: NextRequest) {
       const d = new Date(s);
       return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
     };
-    const slotKey = (date: string, time: string) => `${(date || "").slice(0, 10)}_${time ?? ""}`;
+    const slotKey = (date: string, time: string) =>
+      `${toNormalizedDate(date || "").slice(0, 10)}_${time ?? ""}`;
     const countByScheduleSlot = new Map<string, number>();
     applications.forEach((a) => {
       const sid = a.일정ID ?? "";

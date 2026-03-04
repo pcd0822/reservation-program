@@ -37,7 +37,14 @@ export default function StudentPage() {
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
-  const slotKey = (date: string, timeLabel: string) => `${(date || "").slice(0, 10)}_${timeLabel ?? ""}`;
+  /** API와 동일한 슬롯 키 형식: YYYY-MM-DD_timeLabel (날짜 정규화) */
+  const normalizeSlotDate = (d: string | undefined): string => {
+    const s = String(d ?? "").trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    const t = new Date(s).getTime();
+    return Number.isNaN(t) ? "" : new Date(t).toISOString().slice(0, 10);
+  };
+  const slotKey = (date: string, timeLabel: string) => `${normalizeSlotDate(date)}_${timeLabel ?? ""}`;
 
   useEffect(() => {
     if (!tenantId) return;
@@ -52,9 +59,10 @@ export default function StudentPage() {
   }, [tenantId]);
 
   const getSlotCount = (s: ScheduleItem, slot: SlotOption) => {
-    const key = slotKey((slot.date ?? "").slice(0, 10), slot.timeLabel ?? "");
-    if ((s.slots?.length ?? 0) > 1) return s.slotCounts?.[key] ?? 0;
-    if (s.slotCounts) return s.slotCounts[key] ?? 0;
+    const key = slotKey(slot.date ?? "", slot.timeLabel ?? "");
+    const multiSlot = (s.slots?.length ?? 0) > 1;
+    if (multiSlot) return (s.slotCounts ?? {})[key] ?? 0;
+    if (s.slotCounts && key in (s.slotCounts ?? {})) return s.slotCounts![key] ?? 0;
     return s._count?.applications ?? 0;
   };
   const now = serverTime ?? new Date();
