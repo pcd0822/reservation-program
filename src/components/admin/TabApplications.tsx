@@ -128,6 +128,22 @@ export function TabApplications({ tenantId }: Props) {
   const getScheduleStatus = (s: ScheduleItem): "예정" | "진행중" | "마감" =>
     isClosed(s) ? "마감" : isUpcoming(s) ? "예정" : "진행중";
 
+  /** 같은 역할에 여러 날짜가 있을 때는 슬롯별로 마감 여부 판단 (일정관리 탭용) */
+  const getSlotStatus = (
+    s: ScheduleItem,
+    slot: ScheduleSlot,
+    slotKeyFn: (date: string, timeLabel: string) => string
+  ): "예정" | "진행중" | "마감" => {
+    const sk = slotKeyFn(slot.date ?? "", slot.timeLabel ?? "");
+    const count = (s.slotCounts ?? {})[sk] ?? 0;
+    if (count >= s.maxCapacity) return "마감";
+    const until = parseDateFromSheet(s.applyUntil);
+    if (until != null && now > until) return "마감";
+    const from = parseDateFromSheet(s.applyFrom);
+    if (from != null && now < from) return "예정";
+    return "진행중";
+  };
+
   const formatDateRange = (s: ScheduleItem): string => {
     const slots = s.slots;
     if (slots && slots.length > 1) {
@@ -185,10 +201,10 @@ export function TabApplications({ tenantId }: Props) {
     const out: ScheduleSlotItem[] = [];
     filteredSchedules.forEach((s) => {
       const slots = s.slots && s.slots.length > 0 ? s.slots : [{ date: s.dateStart?.slice(0, 10) ?? "", timeLabel: s.timeLabel ?? "" }];
-      const status = getScheduleStatus(s);
       slots.forEach((slot) => {
         const sk = skFn(slot.date ?? "", slot.timeLabel ?? "");
         const count = s.slotCounts?.[sk] ?? 0;
+        const status = slots.length > 1 ? getSlotStatus(s, slot, skFn) : getScheduleStatus(s);
         out.push({
           scheduleId: s.id,
           scheduleTitle: s.title,
@@ -211,14 +227,15 @@ export function TabApplications({ tenantId }: Props) {
     const skFn = (date: string, timeLabel: string) => `${(date || "").slice(0, 10)}_${timeLabel ?? ""}`;
     const byDate: Record<string, { scheduleId: string; slotKey: string; title: string; count: number; maxCapacity: number; status: CalendarItemStatus }[]> = {};
     filteredSchedules.forEach((s) => {
-      const status = getScheduleStatus(s);
       const slots = s.slots && s.slots.length > 0 ? s.slots : [{ date: s.dateStart?.slice(0, 10) ?? "", timeLabel: s.timeLabel ?? "" }];
-      if (slots.length > 0 && s.slotCounts) {
+      const useSlotStatus = slots.length > 1;
+      if (slots.length > 0 && (s.slotCounts || !useSlotStatus)) {
         slots.forEach((slot) => {
           const d = slot.date?.slice(0, 10);
           if (!d) return;
           const sk = skFn(slot.date ?? "", slot.timeLabel ?? "");
-          const cnt = s.slotCounts![sk] ?? 0;
+          const cnt = (s.slotCounts ?? {})[sk] ?? (useSlotStatus ? 0 : getScheduleCount(s));
+          const status = useSlotStatus ? getSlotStatus(s, slot, skFn) : getScheduleStatus(s);
           if (!byDate[d]) byDate[d] = [];
           byDate[d].push({ scheduleId: s.id, slotKey: sk, title: s.title, count: cnt, maxCapacity: s.maxCapacity, status });
         });
@@ -227,6 +244,7 @@ export function TabApplications({ tenantId }: Props) {
         if (!d) return;
         const sk = skFn(d, s.timeLabel ?? "");
         const cnt = getScheduleCount(s);
+        const status = getScheduleStatus(s);
         if (!byDate[d]) byDate[d] = [];
         byDate[d].push({ scheduleId: s.id, slotKey: sk, title: s.title, count: cnt, maxCapacity: s.maxCapacity, status });
       }
