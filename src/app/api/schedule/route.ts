@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
         return {
           ...s,
           _count: slots.length > 0 ? undefined : { applications: totalForSchedule },
-          slotCounts: slots.length > 0 ? slotCounts : undefined,
+          slotCounts: slots.length > 0 ? slotCounts : {},
         };
       })
       .sort((a, b) => new Date(a.dateStart).getTime() - new Date(b.dateStart).getTime());
