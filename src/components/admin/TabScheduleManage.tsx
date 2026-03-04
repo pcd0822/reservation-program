@@ -123,10 +123,42 @@ export function TabScheduleManage({ tenantId }: Props) {
     return format(new Date(start || end || 0), "M.d (EEE)", { locale: ko });
   };
 
+  const groupedList = useMemo(() => {
+    const makeKey = (s: ScheduleItem) => {
+      const slotsSig = (s.slots ?? [])
+        .map((x) => `${x.date}|${x.timeLabel ?? ""}`)
+        .sort()
+        .join(",");
+      return `${s.type}|${s.dateStart}|${s.dateEnd}|${s.timeLabel ?? ""}|${slotsSig}`;
+    };
+    const map = new Map<string, { key: string; items: ScheduleItem[] }>();
+    list.forEach((s) => {
+      const key = makeKey(s);
+      const group = map.get(key);
+      if (group) {
+        group.items.push(s);
+      } else {
+        map.set(key, { key, items: [s] });
+      }
+    });
+    return Array.from(map.values()).sort(
+      (a, b) =>
+        new Date(a.items[0].dateStart).getTime() - new Date(b.items[0].dateStart).getTime()
+    );
+  }, [list]);
+
   const handleDelete = async (id: string, title: string) => {
     if (!confirm(`"${title}" 일정을 삭제할까요? 이미 신청된 내역은 함께 삭제됩니다.`)) return;
     await fetch(`/api/schedule?id=${id}&tenantId=${tenantId}`, { method: "DELETE" });
     setList((p) => p.filter((s) => s.id !== id));
+  };
+
+  const openLinkPreview = async (scheduleId: string) => {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const studentUrl = `${origin}/s/${tenantId}/${scheduleId}`;
+    const QRCode = (await import("qrcode")).default;
+    const qrDataUrl = await QRCode.toDataURL(studentUrl, { width: 256, margin: 2 });
+    setSavedLinks({ studentUrl, qrDataUrl });
   };
 
   const openEdit = (s: ScheduleItem) => {
@@ -331,52 +363,94 @@ export function TabScheduleManage({ tenantId }: Props) {
       </p>
 
       <ul className="space-y-3">
-        {list.map((s) => (
-          <li
-            key={s.id}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border-2 border-pastel-lavender bg-white/80 p-4"
-          >
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-medium text-gray-800">{s.title}</p>
-                <span
-                  className={`shrink-0 rounded-lg px-2 py-0.5 text-xs font-medium ${
-                    getScheduleStatus(s) === "예정"
-                      ? "bg-pastel-sky/80 text-gray-800"
-                      : getScheduleStatus(s) === "진행중"
-                      ? "bg-pastel-mint text-gray-800"
-                      : "bg-red-200 text-red-800"
-                  }`}
-                >
-                  {getScheduleStatus(s)}
-                </span>
+        {groupedList.map((group) => {
+          const rep = group.items[0];
+          const totalCount = group.items.reduce((sum, item) => sum + getScheduleCount(item), 0);
+          const totalCapacity = group.items.reduce(
+            (sum, item) => sum + item.maxCapacity,
+            0
+          );
+          return (
+            <li
+              key={group.key}
+              className="rounded-2xl border-2 border-pastel-lavender bg-white/80 p-4 space-y-2"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    <p className="font-medium text-gray-800 truncate">
+                      {rep.title}
+                      {group.items.length > 1 && (
+                        <span className="ml-2 text-xs text-gray-500">
+                          외 {group.items.length - 1}개 역할
+                        </span>
+                      )}
+                    </p>
+                    <span
+                      className={`shrink-0 rounded-lg px-2 py-0.5 text-xs font-medium ${
+                        getScheduleStatus(rep) === "예정"
+                          ? "bg-pastel-sky/80 text-gray-800"
+                          : getScheduleStatus(rep) === "진행중"
+                          ? "bg-pastel-mint text-gray-800"
+                          : "bg-red-200 text-red-800"
+                      }`}
+                    >
+                      {getScheduleStatus(rep)}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    {formatDateRange(rep)}
+                    {rep.timeLabel && !(rep.slots && rep.slots.length > 1)
+                      ? ` ${rep.timeLabel}`
+                      : ""}
+                    {" · "}
+                    신청 {totalCount}/{totalCapacity}명 (역할 합계)
+                  </p>
+                </div>
               </div>
-              <p className="text-sm text-gray-600 mt-0.5">
-                {formatDateRange(s)}
-                {s.timeLabel && !(s.slots && s.slots.length > 1) ? ` ${s.timeLabel}` : ""}
-                {" · "}
-                신청 {getScheduleCount(s)}/{s.maxCapacity}명
-              </p>
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => openEdit(s)}
-                className="btn-bounce rounded-xl bg-pastel-sky px-3 py-1.5 text-sm text-gray-800 hover:bg-pastel-sky/80"
-              >
-                <Pencil className="w-4 h-4 inline mr-1" />
-                수정
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDelete(s.id, s.title)}
-                className="btn-bounce rounded-xl bg-red-100 px-3 py-1.5 text-sm text-red-700 hover:bg-red-200"
-              >
-                삭제
-              </button>
-            </div>
-          </li>
-        ))}
+              <div className="space-y-1">
+                {group.items.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-gray-50 px-3 py-2"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">
+                        {item.title}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        신청 {getScheduleCount(item)}/{item.maxCapacity}명
+                      </p>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => openLinkPreview(item.id)}
+                        className="btn-bounce rounded-xl bg-white border border-pastel-lavender px-2 py-1 text-xs text-gray-800 hover:bg-pastel-lavender/40"
+                      >
+                        링크 보기
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openEdit(item)}
+                        className="btn-bounce rounded-xl bg-pastel-sky px-2 py-1 text-xs text-gray-800 hover:bg-pastel-sky/80"
+                      >
+                        수정
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(item.id, item.title)}
+                        className="btn-bounce rounded-xl bg-red-100 px-2 py-1 text-xs text-red-700 hover:bg-red-200"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </li>
+          );
+        })}
       </ul>
 
       {list.length === 0 && (
