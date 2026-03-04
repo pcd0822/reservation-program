@@ -196,19 +196,46 @@ function normalizeSlotDate(val: unknown): string {
   return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
 }
 
-function parseSlots(slotsJson: string | undefined, dateStart: string, timeLabel: string | null): ScheduleSlot[] {
+/** dateStart~dateEnd 구간을 YYYY-MM-DD 배열로 확장 (시트에 Slots가 없을 때 사용) */
+function expandDateRange(dateStart: string, dateEnd: string): string[] {
+  const dStart = normalizeSlotDate(dateStart) || String(dateStart ?? "").trim().slice(0, 10);
+  const dEnd = normalizeSlotDate(dateEnd) || String(dateEnd ?? "").trim().slice(0, 10);
+  if (!dStart || !/^\d{4}-\d{2}-\d{2}$/.test(dStart)) return [];
+  if (!dEnd || dEnd < dStart) return [dStart];
+  const out: string[] = [];
+  const startMs = new Date(dStart + "T12:00:00Z").getTime();
+  const endMs = new Date(dEnd + "T12:00:00Z").getTime();
+  const dayMs = 86400000;
+  for (let t = startMs; t <= endMs; t += dayMs) {
+    out.push(new Date(t).toISOString().slice(0, 10));
+  }
+  return out;
+}
+
+function parseSlots(slotsJson: string | undefined, dateStart: string, dateEnd: string, timeLabel: string | null): ScheduleSlot[] {
   const d = normalizeSlotDate(dateStart) || dateStart.slice(0, 10);
-  if (!slotsJson?.trim()) return [{ date: d, timeLabel: timeLabel ?? "" }];
+  const tl = timeLabel ?? "";
+  if (!slotsJson?.trim()) {
+    const expanded = expandDateRange(dateStart, dateEnd);
+    if (expanded.length > 0) return expanded.map((date) => ({ date, timeLabel: tl }));
+    return [{ date: d, timeLabel: tl }];
+  }
   try {
     const arr = JSON.parse(slotsJson) as unknown;
-    if (!Array.isArray(arr) || arr.length === 0) return [{ date: d, timeLabel: timeLabel ?? "" }];
+    if (!Array.isArray(arr) || arr.length === 0) {
+      const expanded = expandDateRange(dateStart, dateEnd);
+      if (expanded.length > 0) return expanded.map((date) => ({ date, timeLabel: tl }));
+      return [{ date: d, timeLabel: tl }];
+    }
     return arr.map((x) => {
       const raw = (x as { date?: unknown }).date;
       const date = normalizeSlotDate(raw) || String(raw ?? "").slice(0, 10);
       return { date, timeLabel: String((x as { timeLabel?: string }).timeLabel ?? "") };
     }).filter((s) => s.date);
   } catch {
-    return [{ date: d, timeLabel: timeLabel ?? "" }];
+    const expanded = expandDateRange(dateStart, dateEnd);
+    if (expanded.length > 0) return expanded.map((date) => ({ date, timeLabel: tl }));
+    return [{ date: d, timeLabel: tl }];
   }
 }
 
@@ -261,7 +288,8 @@ export async function sheetReadSchedules(sheetId: string): Promise<
       const applyUntil = parseDateCell(r[7]);
       const customFields = hasApplyFrom ? (r[9] ?? "[]") : (r[8] ?? "[]");
       const slotsJson = hasApplyFrom ? r[10] : r[9];
-      const slots = parseSlots(slotsJson, dateStart, timeLabel);
+      const dateEnd = r[4] ?? "";
+      const slots = parseSlots(slotsJson, dateStart, dateEnd, timeLabel);
       const groupTitle = r[11] != null && String(r[11]).trim() !== "" ? String(r[11]).trim() : null;
       return {
         id: r[0] ?? "",
