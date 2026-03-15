@@ -14,15 +14,21 @@ export async function GET(request: NextRequest) {
   try {
     const tenantId = request.nextUrl.searchParams.get("tenantId");
     const scheduleId = request.nextUrl.searchParams.get("scheduleId");
+    const scheduleIdsParam = request.nextUrl.searchParams.get("scheduleIds");
     if (!tenantId) {
       return NextResponse.json({ error: "tenantId required" }, { status: 400 });
     }
     const tenant = await registryGetTenant(tenantId);
     if (!tenant?.sheetId) {
-      return NextResponse.json(scheduleId ? { schedules: [], serverTime: new Date().toISOString() } : []);
+      return NextResponse.json(
+        scheduleId || scheduleIdsParam ? { schedules: [], serverTime: new Date().toISOString() } : []
+      );
     }
     let schedules = await sheetReadSchedules(tenant.sheetId);
-    if (scheduleId && scheduleId.trim()) {
+    if (scheduleIdsParam && scheduleIdsParam.trim()) {
+      const ids = scheduleIdsParam.split(",").map((s) => s.trim()).filter(Boolean);
+      if (ids.length > 0) schedules = schedules.filter((s) => ids.includes(s.id));
+    } else if (scheduleId && scheduleId.trim()) {
       schedules = schedules.filter((s) => s.id === scheduleId.trim());
     }
     const applications = await sheetReadApplications(tenant.sheetId);

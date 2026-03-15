@@ -267,7 +267,7 @@ export function TabSchedules({ tenantId, editGroup, onClearEdit }: Props) {
         const studentUrl =
           editGroup.items.length === 1
             ? `${origin}/s/${tenantId}/${editGroup.items[0].id}`
-            : `${origin}/s/${tenantId}`;
+            : `${origin}/s/${tenantId}?scheduleIds=${editGroup.items.map((i) => i.id).join(",")}`;
         const QRCode = (await import("qrcode")).default;
         const qrDataUrl = await QRCode.toDataURL(studentUrl, { width: 256, margin: 2 });
         setCreatedLinks({ studentUrl, qrDataUrl });
@@ -312,7 +312,7 @@ export function TabSchedules({ tenantId, editGroup, onClearEdit }: Props) {
           ? slotsToSend.map((s) => ({ date: s.date.slice(0, 10), timeLabel: (type === "time" ? s.timeLabel : "") || "" }))
           : undefined;
 
-      let lastCreatedId: string | null = null;
+      const createdIds: string[] = [];
       const groupTitleForCreate = (title || "").trim() || null;
       for (let idx = 0; idx < toCreate.length; idx++) {
         const t = toCreate[idx];
@@ -335,14 +335,16 @@ export function TabSchedules({ tenantId, editGroup, onClearEdit }: Props) {
           }),
         });
         const data = await res.json();
-        if (data?.id) lastCreatedId = data.id;
+        if (data?.id) createdIds.push(data.id);
       }
 
       const origin = typeof window !== "undefined" ? window.location.origin : "";
       const studentUrl =
-        lastCreatedId && toCreate.length === 1
-          ? `${origin}/s/${tenantId}/${lastCreatedId}`
-          : `${origin}/s/${tenantId}`;
+        createdIds.length === 1
+          ? `${origin}/s/${tenantId}/${createdIds[0]}`
+          : createdIds.length > 1
+            ? `${origin}/s/${tenantId}?scheduleIds=${createdIds.join(",")}`
+            : `${origin}/s/${tenantId}`;
       const QRCode = (await import("qrcode")).default;
       const qrDataUrl = await QRCode.toDataURL(studentUrl, { width: 256, margin: 2 });
       setCreatedLinks({ studentUrl, qrDataUrl });

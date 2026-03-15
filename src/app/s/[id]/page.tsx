@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
@@ -29,7 +29,9 @@ type Props = {};
 
 export default function StudentPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const tenantId = params.id as string;
+  const scheduleIdsFromUrl = searchParams.get("scheduleIds");
   const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
   const [serverTime, setServerTime] = useState<Date | null>(null);
   const [formDataBySchedule, setFormDataBySchedule] = useState<Record<string, Record<string, string>>>({});
@@ -48,7 +50,9 @@ export default function StudentPage() {
 
   useEffect(() => {
     if (!tenantId) return;
-    fetch(`/api/schedule?tenantId=${tenantId}`)
+    const query = new URLSearchParams({ tenantId });
+    if (scheduleIdsFromUrl?.trim()) query.set("scheduleIds", scheduleIdsFromUrl.trim());
+    fetch(`/api/schedule?${query.toString()}`)
       .then((r) => r.json())
       .then((data) => {
         const arr = Array.isArray(data) ? data : data?.schedules ?? [];
@@ -56,7 +60,7 @@ export default function StudentPage() {
         setServerTime(data?.serverTime ? new Date(data.serverTime) : null);
       })
       .catch(() => setSchedules([]));
-  }, [tenantId]);
+  }, [tenantId, scheduleIdsFromUrl]);
 
   /** displaySlotsLength: 실제로 표시 중인 슬롯 개수. 2개 이상이면 무조건 slotCounts만 사용(날짜별 마감). */
   const getSlotCount = (s: ScheduleItem, slot: SlotOption, displaySlotsLength: number) => {
@@ -134,7 +138,9 @@ export default function StudentPage() {
         return;
       }
       setMessage({ type: "ok", text: "신청되었어요!" });
-      const updated = await fetch(`/api/schedule?tenantId=${tenantId}`).then((r) => r.json());
+      const refetchQuery = new URLSearchParams({ tenantId });
+      if (scheduleIdsFromUrl?.trim()) refetchQuery.set("scheduleIds", scheduleIdsFromUrl.trim());
+      const updated = await fetch(`/api/schedule?${refetchQuery.toString()}`).then((r) => r.json());
       const arr = Array.isArray(updated) ? updated : updated?.schedules ?? [];
       setSchedules(Array.isArray(arr) ? arr : schedules);
       setServerTime(updated?.serverTime ? new Date(updated.serverTime) : null);

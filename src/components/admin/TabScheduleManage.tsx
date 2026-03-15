@@ -75,7 +75,7 @@ export function TabScheduleManage({ tenantId, onEditGroup }: Props) {
     const studentUrl =
       group.items.length === 1
         ? `${origin}/s/${tenantId}/${group.items[0].id}`
-        : `${origin}/s/${tenantId}`;
+        : `${origin}/s/${tenantId}?scheduleIds=${group.items.map((i) => i.id).join(",")}`;
     const QRCode = (await import("qrcode")).default;
     const qrDataUrl = await QRCode.toDataURL(studentUrl, { width: 256, margin: 2 });
     setSavedLinks({ studentUrl, qrDataUrl });
