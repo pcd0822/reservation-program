@@ -56,7 +56,18 @@ export default function StudentPage() {
       .then((r) => r.json())
       .then((data) => {
         const arr = Array.isArray(data) ? data : data?.schedules ?? [];
-        setSchedules(Array.isArray(arr) ? arr : []);
+        const list = Array.isArray(arr) ? arr : [];
+        // 서버 응답과 무관하게, URL에 scheduleIds가 있으면 클라이언트에서도 최종 필터링
+        // (초기 렌더 타이밍/캐시/일시적 API 오류로 서버가 전체를 내려주는 경우 방어)
+        if (scheduleIdsFromUrl?.trim()) {
+          const ids = scheduleIdsFromUrl
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+          setSchedules(ids.length ? list.filter((s) => ids.includes(s.id)) : list);
+        } else {
+          setSchedules(list);
+        }
         setServerTime(data?.serverTime ? new Date(data.serverTime) : null);
       })
       .catch(() => setSchedules([]));

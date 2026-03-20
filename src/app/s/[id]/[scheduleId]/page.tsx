@@ -135,7 +135,9 @@ export default function StudentSchedulePage() {
         return;
       }
       setMessage({ type: "ok", text: "신청되었어요!" });
-      const updated = await fetch(`/api/schedule?tenantId=${tenantId}`).then((r) => r.json());
+      const updated = await fetch(
+        `/api/schedule?tenantId=${tenantId}&scheduleId=${encodeURIComponent(scheduleId)}`
+      ).then((r) => r.json());
       const arr = Array.isArray(updated) ? updated : updated?.schedules ?? [];
       const list = Array.isArray(arr) ? arr : [];
       const one = list.filter((x: ScheduleItem) => x.id === scheduleId);
