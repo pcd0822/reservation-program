@@ -642,7 +642,7 @@ export async function sheetAppendApplication(
     const h = String(headers[i] ?? "").trim();
     const idx = headerIndex[h];
     if (idx === undefined) continue;
-    alignedRow[idx] = row[i] ?? "";
+    alignedRow[idx] = row[i] === undefined || row[i] === null ? "" : String(row[i]);
   }
 
   await sheets.spreadsheets.values.append({
