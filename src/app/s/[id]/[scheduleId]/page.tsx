@@ -169,10 +169,13 @@ export default function StudentSchedulePage() {
   const s = schedules[0];
   const slots = (s.slots && s.slots.length > 0 ? s.slots : [{ date: s.dateStart.slice(0, 10), timeLabel: s.timeLabel ?? "" }]) as SlotOption[];
   const selectedSlot = getEffectiveSlot(s);
-              const closed = selectedSlot ? isSlotClosed(s, selectedSlot, slots.length) : { closed: false as const, reason: null };
+  const closed = selectedSlot ? isSlotClosed(s, selectedSlot, slots.length) : { closed: false as const, reason: null };
   const fields = parseCustomFields(s.customFields);
   const formData = formDataBySchedule[s.id] ?? {};
-  const canApply = selectedSlot && !closed.closed && !submitting;
+  const requiredMissing = fields.some(
+    (f) => f.required && (formData[f.id] === undefined || String(formData[f.id] ?? "").trim() === "")
+  );
+  const canApply = selectedSlot && !closed.closed && !requiredMissing && !submitting;
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-pastel-cream via-pastel-sky/20 to-pastel-mint/20 relative">
@@ -197,8 +200,57 @@ export default function StudentSchedulePage() {
           <li className="list-none rounded-2xl border-2 p-4 md:p-5 transition-all bg-white/90 border-pastel-lavender hover:border-pastel-pink hover:shadow-md space-y-4">
             <p className="font-medium text-gray-800 text-base">{s.title}</p>
 
+            <div className="rounded-2xl border border-pastel-sky/60 bg-white p-4">
+              {slots.length > 1 ? (
+                <>
+                  <p className="text-xs text-gray-600 font-medium mb-1.5">일정 선택</p>
+                  <div className="flex flex-wrap gap-2">
+                    {slots.map((slot) => {
+                      const slotClosed = isSlotClosed(s, slot, slots.length);
+                      const count = getSlotCount(s, slot, slots.length);
+                      const isSelected = selectedSlot?.date === slot.date && selectedSlot?.timeLabel === slot.timeLabel;
+                      return (
+                        <button
+                          key={slotKey(slot.date, slot.timeLabel)}
+                          type="button"
+                          onClick={() => setSelectedSlotBySchedule((p) => ({ ...p, [s.id]: slot }))}
+                          disabled={slotClosed.closed}
+                          className={`rounded-xl px-3 py-2 text-sm border-2 transition-all ${
+                            slotClosed.closed
+                              ? "bg-gray-100 border-gray-300 text-gray-500 cursor-not-allowed"
+                              : isSelected
+                                ? "bg-pastel-pink/30 border-pastel-pink text-gray-800"
+                                : "bg-white border-pastel-lavender hover:border-pastel-pink"
+                          }`}
+                        >
+                          {format(new Date(slot.date), "M/d (EEE)", { locale: ko })}
+                          {slot.timeLabel ? ` ${slot.timeLabel}` : ""}
+                          <span className="ml-1 text-gray-500">
+                            {count}/{s.maxCapacity}명
+                          </span>
+                          {slotClosed.closed && " · 마감"}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-gray-600 font-medium mb-1.5">일정 선택</p>
+                  <p className="text-sm text-gray-600">
+                    {format(new Date(slots[0].date), "yyyy년 M월 d일 (EEE)", { locale: ko })}
+                    {slots[0].timeLabel ? ` ${slots[0].timeLabel}` : ""}
+                    <span className="ml-1 text-gray-500">
+                      · 신청 {getSlotCount(s, slots[0], slots.length)}/{s.maxCapacity}명
+                      {closed.closed && <span className="text-red-600 font-bold"> · {closed.reason}</span>}
+                    </span>
+                  </p>
+                </>
+              )}
+            </div>
+
             {fields.length > 0 && (
-              <div className="space-y-3">
+              <div className="rounded-2xl border border-pastel-lavender/60 bg-white p-4 space-y-3">
                 <p className="text-xs text-gray-600 font-medium">입력 항목</p>
                 <div className="space-y-2">
                   {fields.map((f) => (
@@ -259,59 +311,21 @@ export default function StudentSchedulePage() {
               </div>
             )}
 
-            <div>
-              {slots.length > 1 ? (
-                <>
-                  <p className="text-xs text-gray-600 font-medium mb-1.5">신청할 일시 선택</p>
-                  <div className="flex flex-wrap gap-2">
-                    {slots.map((slot) => {
-                      const slotClosed = isSlotClosed(s, slot, slots.length);
-                      const count = getSlotCount(s, slot, slots.length);
-                      const isSelected = selectedSlot?.date === slot.date && selectedSlot?.timeLabel === slot.timeLabel;
-                      return (
-                        <button
-                          key={slotKey(slot.date, slot.timeLabel)}
-                          type="button"
-                          onClick={() => setSelectedSlotBySchedule((p) => ({ ...p, [s.id]: slot }))}
-                          disabled={slotClosed.closed}
-                          className={`rounded-xl px-3 py-2 text-sm border-2 transition-all ${
-                            slotClosed.closed
-                              ? "bg-gray-100 border-gray-300 text-gray-500 cursor-not-allowed"
-                              : isSelected
-                                ? "bg-pastel-pink/30 border-pastel-pink text-gray-800"
-                                : "bg-white border-pastel-lavender hover:border-pastel-pink"
-                          }`}
-                        >
-                          {format(new Date(slot.date), "M/d (EEE)", { locale: ko })}
-                          {slot.timeLabel ? ` ${slot.timeLabel}` : ""}
-                          <span className="ml-1 text-gray-500">
-                            {count}/{s.maxCapacity}명
-                          </span>
-                          {slotClosed.closed && " · 마감"}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </>
-              ) : (
-                <p className="text-sm text-gray-600">
-                  {format(new Date(slots[0].date), "yyyy년 M월 d일 (EEE)", { locale: ko })}
-                  {slots[0].timeLabel ? ` ${slots[0].timeLabel}` : ""}
-                  <span className="ml-1 text-gray-500">
-                    · 신청 {getSlotCount(s, slots[0], slots.length)}/{s.maxCapacity}명
-                    {closed.closed && <span className="text-red-600 font-bold"> · {closed.reason}</span>}
-                  </span>
-                </p>
-              )}
-            </div>
-
             <button
               type="button"
               onClick={() => canApply && handleApply(s.id, selectedSlot ?? undefined)}
               disabled={!canApply}
               className="btn-bounce rounded-2xl px-5 py-2.5 font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto shrink-0 bg-pastel-pink text-gray-800 shadow hover:shadow-lg disabled:bg-gray-300 disabled:text-gray-500"
             >
-              {!selectedSlot && slots.length > 1 ? "일시 선택" : closed.closed ? "신청 마감" : submitting === s.id ? "신청 중…" : "신청하기"}
+              {requiredMissing
+                ? "필수 항목 입력"
+                : !selectedSlot && slots.length > 1
+                  ? "일시 선택"
+                  : closed.closed
+                    ? "신청 마감"
+                    : submitting === s.id
+                      ? "신청 중…"
+                      : "신청하기"}
             </button>
           </li>
         </section>
