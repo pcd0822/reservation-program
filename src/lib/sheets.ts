@@ -272,7 +272,6 @@ export async function sheetReadSchedules(sheetId: string): Promise<
     .map((r) => {
       const dateStart = r[3] ?? "";
       const timeLabel = r[5]?.trim() || null;
-      const hasApplyFrom = r.length >= 11;
       const parseDateCell = (val: unknown): string | null => {
         if (val == null || val === "") return null;
         if (typeof val === "number" && Number.isFinite(val)) {
@@ -284,10 +283,13 @@ export async function sheetReadSchedules(sheetId: string): Promise<
         const d = new Date(s);
         return Number.isNaN(d.getTime()) ? null : d.toISOString();
       };
-      const applyFrom = parseDateCell(hasApplyFrom ? r[8] : undefined);
+      // 시트 컬럼 고정 인덱스:
+      // A Id(0), B Title(1), C Type(2), D DateStart(3), E DateEnd(4), F TimeLabel(5),
+      // G MaxCapacity(6), H ApplyUntil(7), I ApplyFrom(8), J CustomFields(9), K Slots(10), L GroupTitle(11)
+      const applyFrom = parseDateCell(r[8]);
       const applyUntil = parseDateCell(r[7]);
-      const customFields = hasApplyFrom ? (r[9] ?? "[]") : (r[8] ?? "[]");
-      const slotsJson = hasApplyFrom ? r[10] : r[9];
+      const customFields = (r[9] ?? "[]") as string;
+      const slotsJson = r[10] ?? "";
       const dateEnd = r[4] ?? "";
       const slots = parseSlots(slotsJson, dateStart, dateEnd, timeLabel);
       const groupTitle = r[11] != null && String(r[11]).trim() !== "" ? String(r[11]).trim() : null;
