@@ -60,28 +60,40 @@ export function TabApplications({ tenantId }: Props) {
     return () => document.removeEventListener("click", close);
   }, [filterOpen]);
 
-  const load = () => {
-    fetch(`/api/schedule?tenantId=${tenantId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        const list = Array.isArray(data) ? data : data?.schedules ?? [];
-        setSchedules(Array.isArray(list) ? list : []);
-        setServerTime(data?.serverTime ? new Date(data.serverTime) : null);
-      });
-    fetch(`/api/application?tenantId=${tenantId}`)
-      .then((r) => r.json())
-      .then((data) => setApplications(Array.isArray(data) ? data : []));
+  const load = async () => {
+    try {
+      const r = await fetch(`/api/schedule?tenantId=${tenantId}`);
+      const data = await r.json().catch(() => null);
+      const list = Array.isArray(data) ? data : data?.schedules;
+      if (Array.isArray(list)) setSchedules(list);
+      if (data?.serverTime) setServerTime(new Date(data.serverTime));
+    } catch (e) {
+      // 일시적인 구글 시트 API 오류/레이턴시로 인해 화면이 통째로 비지 않게 기존 상태 유지
+      console.error("[TabApplications] load schedule failed:", e);
+    }
+
+    try {
+      const r = await fetch(`/api/application?tenantId=${tenantId}`);
+      const data = await r.json().catch(() => null);
+      if (Array.isArray(data)) setApplications(data);
+    } catch (e) {
+      console.error("[TabApplications] load applications failed:", e);
+    }
   };
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 10000);
+    // 너무 잦은 폴링은 구글 시트 API 레이트리밋/간헐 에러를 유발할 수 있어 주기를 늘림
+    const t = setInterval(load, 30000);
     return () => clearInterval(t);
   }, [tenantId]);
 
   useEffect(() => {
-    if (!loading) setLoading(false);
-  }, [schedules, applications]);
+    // 실제로 loading 플래그를 화면에서 쓰지 않지만, 기본값은 true라서 의미가 없었음
+    // (기존 로직이 noop에 가까워 혼동을 줄일 수 있어 정리)
+    setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const selectedSchedule = selectedItemId ? schedules.find((s) => s.id === selectedItemId) : null;
   const slotKey = (date: string, timeLabel: string) =>

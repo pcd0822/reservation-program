@@ -556,7 +556,7 @@ export async function sheetReadApplications(
     try {
       const res = await sheets.spreadsheets.values.get({
         spreadsheetId: sheetId,
-        range: `'${escaped}'!A:Z`,
+          range: `'${escaped}'!A:ZZ`,
       });
       rows = (res.data.values ?? []) as string[][];
     } catch {
@@ -589,24 +589,67 @@ export async function sheetAppendApplication(
   const auth = getAuth();
   const sheets = google.sheets({ version: "v4", auth });
   const appSheetName = await ensureApplicationSheet(sheetId, scheduleId);
+
+  const columnToLetter = (n: number): string => {
+    // 1 -> A, 26 -> Z, 27 -> AA ...
+    let num = Math.max(1, Math.floor(n));
+    let out = "";
+    while (num > 0) {
+      const r = (num - 1) % 26;
+      out = String.fromCharCode(65 + r) + out;
+      num = Math.floor((num - 1) / 26);
+    }
+    return out;
+  };
+
+  // 기존 헤더 1행을 넉넉히 읽고, 새로 들어온 headers가 있으면 합쳐서 항상 최신 상태로 갱신
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: `'${appSheetName}'!A1:Z1`,
+    range: `'${appSheetName}'!A1:ZZ1`,
   });
   const existing = (res.data.values?.[0] ?? []) as string[];
-  if (existing.length === 0 || existing[0] === "") {
+  const existingHeaders = existing.map((h) => String(h ?? "").trim()).filter((h) => h.length > 0);
+
+  const finalHeaders = [...existingHeaders];
+  for (const h of headers) {
+    const hh = String(h ?? "").trim();
+    if (!hh) continue;
+    if (!finalHeaders.includes(hh)) finalHeaders.push(hh);
+  }
+
+  const lastCol = columnToLetter(finalHeaders.length);
+  // 헤더가 달라졌으면 1행을 갱신 (빈 경우 포함)
+  const needsHeaderUpdate =
+    finalHeaders.length !== existingHeaders.length ||
+    finalHeaders.some((h, i) => (existingHeaders[i] ?? "") !== h);
+
+  if (needsHeaderUpdate) {
     await sheets.spreadsheets.values.update({
       spreadsheetId: sheetId,
-      range: `'${appSheetName}'!A1`,
+      range: `'${appSheetName}'!A1:${lastCol}1`,
       valueInputOption: "USER_ENTERED",
-      requestBody: { values: [headers] },
+      requestBody: { values: [finalHeaders] },
     });
   }
+
+  // append할 때 row 값이 최종 헤더 인덱스에 정확히 들어가도록 정렬
+  const headerIndex: Record<string, number> = {};
+  finalHeaders.forEach((h, i) => {
+    if (headerIndex[h] === undefined) headerIndex[h] = i;
+  });
+  const alignedRow = Array.from({ length: finalHeaders.length }, () => "");
+  for (let i = 0; i < headers.length; i++) {
+    const h = String(headers[i] ?? "").trim();
+    const idx = headerIndex[h];
+    if (idx === undefined) continue;
+    alignedRow[idx] = row[i] ?? "";
+  }
+
   await sheets.spreadsheets.values.append({
     spreadsheetId: sheetId,
-    range: `'${appSheetName}'!A:Z`,
+    range: `'${appSheetName}'!A:${lastCol}`,
     valueInputOption: "USER_ENTERED",
     insertDataOption: "INSERT_ROWS",
-    requestBody: { values: [row] },
+    requestBody: { values: [alignedRow] },
   });
 }
