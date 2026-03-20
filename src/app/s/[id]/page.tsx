@@ -34,7 +34,7 @@ export default function StudentPage() {
   const scheduleIdsFromUrl = searchParams.get("scheduleIds");
   const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
   const [serverTime, setServerTime] = useState<Date | null>(null);
-  const [formDataBySchedule, setFormDataBySchedule] = useState<Record<string, Record<string, string>>>({});
+  const [formData, setFormData] = useState<Record<string, string>>({});
   const [selectedSlotBySchedule, setSelectedSlotBySchedule] = useState<Record<string, SlotOption>>({});
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
@@ -90,10 +90,9 @@ export default function StudentPage() {
 
   const validateSchedule = (s: ScheduleItem): string | null => {
     const fields = parseCustomFields(s.customFields);
-    const data = formDataBySchedule[s.id] ?? {};
     for (const f of fields) {
       if (f.required) {
-        const v = data[f.id];
+        const v = formData[f.id];
         if (v === undefined || String(v).trim() === "") return `"${f.label}"을(를) 입력해 주세요.`;
       }
     }
@@ -129,7 +128,7 @@ export default function StudentPage() {
           tenantId,
           scheduleItemId: scheduleId,
           selectedSlot: { date: slot.date.slice(0, 10), timeLabel: slot.timeLabel },
-          data: formDataBySchedule[scheduleId] ?? {},
+          data: formData,
         }),
       });
       const data = await res.json();
@@ -153,6 +152,11 @@ export default function StudentPage() {
 
   if (!tenantId) return null;
 
+  const groupFields = schedules.length > 0 ? parseCustomFields(schedules[0].customFields) : [];
+  const requiredMissing = groupFields.some(
+    (f) => f.required && (formData[f.id] === undefined || String(formData[f.id] ?? "").trim() === "")
+  );
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-pastel-cream via-pastel-sky/20 to-pastel-mint/20 relative">
       <p className="absolute top-3 right-4 text-xs text-gray-400 z-10">Designed by Deulssam</p>
@@ -175,16 +179,57 @@ export default function StudentPage() {
         <section>
           <h2 className="text-lg font-bold text-gray-800 mb-3">일정별 신청</h2>
           <p className="text-sm text-gray-600 mb-4">원하는 일정을 골라 입력 항목을 채운 뒤, 일시를 선택하고 신청하세요.</p>
+          {groupFields.length > 0 && (
+            <div className="rounded-2xl border border-pastel-lavender/60 bg-white p-4 space-y-3 mb-6">
+              <p className="text-xs text-gray-600 font-medium">입력 항목</p>
+              <div className="space-y-2">
+                {groupFields.map((f) => (
+                  <div key={f.id}>
+                    <label className="block text-sm text-gray-700 mb-0.5">
+                      {f.label} {f.required && <span className="text-red-500">*</span>}
+                    </label>
+                    {f.type === "text" && (
+                      <input
+                        type="text"
+                        value={formData[f.id] ?? ""}
+                        onChange={(e) => setFormData((p) => ({ ...p, [f.id]: e.target.value }))}
+                        placeholder={`예: ${f.label} 입력`}
+                        className="w-full rounded-xl border-2 border-pastel-lavender px-3 py-2 text-sm placeholder-gray-400 focus:border-pastel-pink focus:outline-none"
+                      />
+                    )}
+                    {f.type === "number" && (
+                      <input
+                        type="number"
+                        value={formData[f.id] ?? ""}
+                        onChange={(e) => setFormData((p) => ({ ...p, [f.id]: e.target.value }))}
+                        placeholder="숫자 입력"
+                        className="w-full rounded-xl border-2 border-pastel-lavender px-3 py-2 text-sm placeholder-gray-400 focus:border-pastel-pink focus:outline-none"
+                      />
+                    )}
+                    {f.type === "select" && (
+                      <select
+                        value={formData[f.id] ?? ""}
+                        onChange={(e) => setFormData((p) => ({ ...p, [f.id]: e.target.value }))}
+                        className="w-full rounded-xl border-2 border-pastel-lavender px-3 py-2 text-sm focus:border-pastel-pink focus:outline-none"
+                      >
+                        <option value="">선택</option>
+                        {(f.options ?? []).map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <ul className="space-y-6">
             {schedules.map((s) => {
               const slots = (s.slots && s.slots.length > 0 ? s.slots : [{ date: s.dateStart.slice(0, 10), timeLabel: s.timeLabel ?? "" }]) as SlotOption[];
               const selectedSlot = getEffectiveSlot(s);
               const closed = selectedSlot ? isSlotClosed(s, selectedSlot, slots.length) : { closed: false as const, reason: null };
-              const fields = parseCustomFields(s.customFields);
-              const formData = formDataBySchedule[s.id] ?? {};
-              const requiredMissing = fields.some(
-                (f) => f.required && (formData[f.id] === undefined || String(formData[f.id] ?? "").trim() === "")
-              );
               const canApply = selectedSlot && !closed.closed && !requiredMissing && !submitting;
               return (
                 <li
@@ -192,68 +237,6 @@ export default function StudentPage() {
                   className="rounded-2xl border-2 p-4 md:p-5 transition-all bg-white/90 border-pastel-lavender hover:border-pastel-pink hover:shadow-md space-y-4"
                 >
                   <p className="font-medium text-gray-800 text-base">{s.title}</p>
-
-                  {fields.length > 0 && (
-                    <div className="rounded-2xl border border-pastel-lavender/60 bg-white p-4 space-y-3">
-                      <p className="text-xs text-gray-600 font-medium">입력 항목</p>
-                      <div className="space-y-2">
-                        {fields.map((f) => (
-                          <div key={f.id}>
-                            <label className="block text-sm text-gray-700 mb-0.5">
-                              {f.label} {f.required && <span className="text-red-500">*</span>}
-                            </label>
-                            {f.type === "text" && (
-                              <input
-                                type="text"
-                                value={formData[f.id] ?? ""}
-                                onChange={(e) =>
-                                  setFormDataBySchedule((p) => ({
-                                    ...p,
-                                    [s.id]: { ...(p[s.id] ?? {}), [f.id]: e.target.value },
-                                  }))
-                                }
-                                placeholder={`예: ${f.label} 입력`}
-                                className="w-full rounded-xl border-2 border-pastel-lavender px-3 py-2 text-sm placeholder-gray-400 focus:border-pastel-pink focus:outline-none"
-                              />
-                            )}
-                            {f.type === "number" && (
-                              <input
-                                type="number"
-                                value={formData[f.id] ?? ""}
-                                onChange={(e) =>
-                                  setFormDataBySchedule((p) => ({
-                                    ...p,
-                                    [s.id]: { ...(p[s.id] ?? {}), [f.id]: e.target.value },
-                                  }))
-                                }
-                                placeholder="숫자 입력"
-                                className="w-full rounded-xl border-2 border-pastel-lavender px-3 py-2 text-sm placeholder-gray-400 focus:border-pastel-pink focus:outline-none"
-                              />
-                            )}
-                            {f.type === "select" && (
-                              <select
-                                value={formData[f.id] ?? ""}
-                                onChange={(e) =>
-                                  setFormDataBySchedule((p) => ({
-                                    ...p,
-                                    [s.id]: { ...(p[s.id] ?? {}), [f.id]: e.target.value },
-                                  }))
-                                }
-                                className="w-full rounded-xl border-2 border-pastel-lavender px-3 py-2 text-sm focus:border-pastel-pink focus:outline-none"
-                              >
-                                <option value="">선택</option>
-                                {(f.options ?? []).map((o) => (
-                                  <option key={o} value={o}>
-                                    {o}
-                                  </option>
-                                ))}
-                              </select>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
 
                   <div className="rounded-2xl border border-pastel-sky/60 bg-white p-4">
                     {slots.length > 1 ? (
