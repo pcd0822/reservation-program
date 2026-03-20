@@ -152,10 +152,18 @@ export default function StudentPage() {
 
   if (!tenantId) return null;
 
-  const groupFields = schedules.length > 0 ? parseCustomFields(schedules[0].customFields) : [];
-  const requiredMissing = groupFields.some(
-    (f) => f.required && (formData[f.id] === undefined || String(formData[f.id] ?? "").trim() === "")
-  );
+  // 여러 역할(여러 scheduleId)을 한 페이지에서 볼 때 입력항목이 첫 역할로만 한정되지 않도록
+  // 현재 표시 중인 모든 역할의 customFields를 합쳐서 렌더링합니다.
+  const allFields = useMemo(() => {
+    const m = new Map<string, CustomField>();
+    schedules.forEach((s) => {
+      const fields = parseCustomFields(s.customFields);
+      fields.forEach((f) => {
+        if (!m.has(f.id)) m.set(f.id, f);
+      });
+    });
+    return Array.from(m.values());
+  }, [schedules]);
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-pastel-cream via-pastel-sky/20 to-pastel-mint/20 relative">
@@ -179,11 +187,11 @@ export default function StudentPage() {
         <section>
           <h2 className="text-lg font-bold text-gray-800 mb-3">일정별 신청</h2>
           <p className="text-sm text-gray-600 mb-4">원하는 일정을 골라 입력 항목을 채운 뒤, 일시를 선택하고 신청하세요.</p>
-          {groupFields.length > 0 && (
+          {allFields.length > 0 && (
             <div className="rounded-2xl border border-pastel-lavender/60 bg-white p-4 space-y-3 mb-6">
               <p className="text-xs text-gray-600 font-medium">입력 항목</p>
               <div className="space-y-2">
-                {groupFields.map((f) => (
+                {allFields.map((f) => (
                   <div key={f.id}>
                     <label className="block text-sm text-gray-700 mb-0.5">
                       {f.label} {f.required && <span className="text-red-500">*</span>}
@@ -230,7 +238,11 @@ export default function StudentPage() {
               const slots = (s.slots && s.slots.length > 0 ? s.slots : [{ date: s.dateStart.slice(0, 10), timeLabel: s.timeLabel ?? "" }]) as SlotOption[];
               const selectedSlot = getEffectiveSlot(s);
               const closed = selectedSlot ? isSlotClosed(s, selectedSlot, slots.length) : { closed: false as const, reason: null };
-              const canApply = selectedSlot && !closed.closed && !requiredMissing && !submitting;
+              const fields = parseCustomFields(s.customFields);
+              const requiredMissingForThis = fields.some(
+                (f) => f.required && (formData[f.id] === undefined || String(formData[f.id] ?? "").trim() === "")
+              );
+              const canApply = selectedSlot && !closed.closed && !requiredMissingForThis && !submitting;
               return (
                 <li
                   key={s.id}
@@ -293,7 +305,7 @@ export default function StudentPage() {
                     disabled={!canApply}
                     className="btn-bounce rounded-2xl px-5 py-2.5 font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto shrink-0 bg-pastel-pink text-gray-800 shadow hover:shadow-lg disabled:bg-gray-300 disabled:text-gray-500"
                   >
-                    {requiredMissing
+                    {requiredMissingForThis
                       ? "필수 항목 입력"
                       : !selectedSlot && slots.length > 1
                         ? "일시 선택"
