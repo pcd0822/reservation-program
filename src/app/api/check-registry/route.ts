@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { google } from "googleapis";
 
+// 빌드 때 결과가 굳지 않도록 요청마다 실행(환경 변수를 바꾼 뒤 재배포 없이도 반영)
+export const dynamic = "force-dynamic";
+
 /**
  * 등록 시트·서비스 계정 연동 상태를 확인합니다.
  * 브라우저에서 /api/check-registry 로 열어보면 원인 파악에 도움이 됩니다.

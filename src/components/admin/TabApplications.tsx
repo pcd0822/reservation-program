@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useMemo } from "react";
+import { adminFetch } from "@/lib/adminClient";
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterval, startOfWeek, endOfWeek, isSameMonth, isToday } from "date-fns";
 import { ko } from "date-fns/locale";
 import { parseCustomFields, parseDateFromSheet } from "@/lib/utils";
@@ -73,7 +74,7 @@ export function TabApplications({ tenantId }: Props) {
     }
 
     try {
-      const r = await fetch(`/api/application?tenantId=${tenantId}`);
+      const r = await adminFetch(tenantId, `/api/application?tenantId=${tenantId}`);
       const data = await r.json().catch(() => null);
       if (Array.isArray(data)) setApplications(data);
     } catch (e) {

@@ -6,6 +6,9 @@ import {
   sheetAppendApplication,
 } from "@/lib/sheets";
 import { parseCustomFields, parseDateFromSheet } from "@/lib/utils";
+import { requireAdmin } from "@/lib/adminAuth";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,8 +17,11 @@ export async function GET(request: NextRequest) {
     if (!tenantId) {
       return NextResponse.json({ error: "tenantId required" }, { status: 400 });
     }
-    const tenant = await registryGetTenant(tenantId);
-    if (!tenant?.sheetId) {
+    // 신청 내역(학생 입력 전체)은 관리자만 볼 수 있다
+    const auth = await requireAdmin(request, tenantId);
+    if (!auth.ok) return auth.response;
+    const tenant = auth.tenant;
+    if (!tenant.sheetId) {
       return NextResponse.json([]);
     }
     const applications = await sheetReadApplications(tenant.sheetId, scheduleItemId ?? undefined);

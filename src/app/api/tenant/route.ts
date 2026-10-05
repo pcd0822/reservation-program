@@ -1,32 +1,50 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateToken } from "@/lib/utils";
+import { generateAdminKey, requireAdmin } from "@/lib/adminAuth";
 import {
   extractSheetIdFromUrl,
   registryAppendTenant,
   registryUpdateSheetId,
-  registryGetTenant,
+  registrySetAdminKeyIfEmpty,
 } from "@/lib/sheets";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { action, id, sheetUrl } = body as {
-      action: "create" | "connect";
+      action: "create" | "connect" | "issueKey";
       id?: string;
       sheetUrl?: string;
     };
 
     if (action === "create") {
       const tenantId = generateToken();
-      await registryAppendTenant(tenantId);
+      const adminKey = generateAdminKey();
+      await registryAppendTenant(tenantId, adminKey);
+      // 관리자 링크에만 키를 붙인다. 학생 링크는 ID 만이라 관리자 화면을 열 수 없다.
       return NextResponse.json({
         id: tenantId,
-        adminUrl: `/a/${tenantId}`,
+        adminKey,
+        adminUrl: `/a/${tenantId}?k=${adminKey}`,
         studentUrl: `/s/${tenantId}`,
       });
     }
 
+    // 예전에 만든 일정 묶음(키 없음)에 처음 한 번 관리자 키를 발급한다
+    if (action === "issueKey" && id) {
+      const adminKey = generateAdminKey();
+      const issued = await registrySetAdminKeyIfEmpty(id, adminKey);
+      if (!issued) {
+        return NextResponse.json({ error: "이미 관리자 키가 발급된 일정이에요." }, { status: 409 });
+      }
+      return NextResponse.json({ id, adminKey, adminUrl: `/a/${id}?k=${adminKey}` });
+    }
+
     if (action === "connect" && id && sheetUrl) {
+      const auth = await requireAdmin(request, id);
+      if (!auth.ok) return auth.response;
       const sheetId = extractSheetIdFromUrl(sheetUrl);
       if (!sheetId) {
         return NextResponse.json(
@@ -64,11 +82,10 @@ export async function GET(request: NextRequest) {
     if (!id) {
       return NextResponse.json({ error: "id required" }, { status: 400 });
     }
-    const tenant = await registryGetTenant(id);
-    if (!tenant) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-    return NextResponse.json({ id, sheetId: tenant.sheetId });
+    const auth = await requireAdmin(request, id);
+    if (!auth.ok) return auth.response;
+    // legacy: 관리자 키가 아직 없는 예전 일정 묶음 → 관리자 화면이 키 발급을 안내한다
+    return NextResponse.json({ id, sheetId: auth.tenant.sheetId, legacy: auth.legacy });
   } catch (e) {
     const err = e as { message?: string };
     const msg = String(err?.message ?? e);

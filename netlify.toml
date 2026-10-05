@@ -4,6 +4,6 @@
   command = "npm run build"
 
 [build.environment]
-  NODE_VERSION = "18"
+  NODE_VERSION = "20"
 
 # Set GOOGLE_SERVICE_ACCOUNT_KEY in Netlify Dashboard > Environment variables

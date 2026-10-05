@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { adminFetch } from "@/lib/adminClient";
 
 type ScheduleSlot = { date: string; timeLabel?: string };
 
@@ -84,7 +85,7 @@ export function TabScheduleManage({ tenantId, onEditGroup }: Props) {
   const handleDeleteGroup = async (group: { items: ScheduleItem[] }) => {
     if (!confirm(`이 일정 전체(역할 ${group.items.length}개)를 삭제할까요? 이미 신청된 내역도 함께 삭제됩니다.`)) return;
     for (const item of group.items) {
-      await fetch(`/api/schedule?id=${item.id}&tenantId=${tenantId}`, { method: "DELETE" });
+      await adminFetch(tenantId, `/api/schedule?id=${item.id}&tenantId=${tenantId}`, { method: "DELETE" });
     }
     setList((prev) => prev.filter((s) => !group.items.some((i) => i.id === s.id)));
   };

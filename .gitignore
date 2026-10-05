@@ -13,11 +13,12 @@ GOOGLE_SERVICE_ACCOUNT_KEY-oneline.txt
 .next
 out
 
-# prisma
-prisma/*.db
-prisma/*.db-journal
 
 # misc
 .DS_Store
 *.pem
 debug.log
+
+# 로컬에만 남은 예전 개발용 DB(쓰지 않음)·빌드 캐시
+prisma/
+*.tsbuildinfo

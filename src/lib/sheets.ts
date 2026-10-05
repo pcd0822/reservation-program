@@ -72,75 +72,123 @@ export function extractSheetIdFromUrl(url: string): string | null {
   return match ? match[1] : null;
 }
 
-// ----- 등록 시트 (tenantId <-> sheetId) -----
+// ----- 등록 시트 (tenantId <-> sheetId <-> adminKey) -----
+// 열 구성: A TenantId · B SheetId · C AdminKey
+// AdminKey 는 관리자 화면·쓰기 API 를 여는 비밀 키다. 학생 링크(/s/ID)에는 들어가지 않는다.
+// 예전에 만든 일정 묶음은 C 열이 비어 있을 수 있다(관리자 화면에서 발급).
 
-export async function registryAppendTenant(tenantId: string): Promise<void> {
+const REGISTRY_HEADER = ["TenantId", "SheetId", "AdminKey"];
+
+/** 머리글이 없으면 A1:C1 을 쓰고, 예전 2열 머리글이면 C1 만 채운다 */
+async function ensureRegistryHeader(sheetName: string): Promise<void> {
   const auth = getAuth();
   const sheets = google.sheets({ version: "v4", auth });
   const registryId = getRegistrySheetId();
-  const sheetName = await getRegistryFirstSheetName();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: registryId,
-    range: `'${sheetName}'!A1:B1`,
+    range: `'${sheetName}'!A1:C1`,
   });
   const row0 = (res.data.values?.[0] ?? []) as string[];
   if (row0.length === 0 || row0[0] === "") {
     await sheets.spreadsheets.values.update({
       spreadsheetId: registryId,
       range: `'${sheetName}'!A1`,
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: [["TenantId", "SheetId"]] },
+      valueInputOption: "RAW",
+      requestBody: { values: [REGISTRY_HEADER] },
+    });
+  } else if (row0[0] === "TenantId" && row0[2] !== "AdminKey") {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: registryId,
+      range: `'${sheetName}'!C1`,
+      valueInputOption: "RAW",
+      requestBody: { values: [["AdminKey"]] },
     });
   }
+}
+
+export async function registryAppendTenant(tenantId: string, adminKey: string): Promise<void> {
+  const auth = getAuth();
+  const sheets = google.sheets({ version: "v4", auth });
+  const registryId = getRegistrySheetId();
+  const sheetName = await getRegistryFirstSheetName();
+  await ensureRegistryHeader(sheetName);
   await sheets.spreadsheets.values.append({
     spreadsheetId: registryId,
-    range: `'${sheetName}'!A:B`,
-    valueInputOption: "USER_ENTERED",
+    range: `'${sheetName}'!A:C`,
+    valueInputOption: "RAW",
     insertDataOption: "INSERT_ROWS",
-    requestBody: { values: [[tenantId, ""]] },
+    requestBody: { values: [[tenantId, "", adminKey]] },
   });
+}
+
+/** 등록 시트에서 tenant 행 번호(1부터)를 찾는다 */
+async function findRegistryRow(sheetName: string, tenantId: string): Promise<number | null> {
+  const auth = getAuth();
+  const sheets = google.sheets({ version: "v4", auth });
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: getRegistrySheetId(),
+    range: `'${sheetName}'!A:A`,
+  });
+  const rows = (res.data.values ?? []) as string[][];
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === tenantId) return i + 1;
+  }
+  return null;
 }
 
 export async function registryUpdateSheetId(tenantId: string, sheetId: string): Promise<void> {
   const auth = getAuth();
   const sheets = google.sheets({ version: "v4", auth });
-  const registryId = getRegistrySheetId();
   const sheetName = await getRegistryFirstSheetName();
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: registryId,
-    range: `'${sheetName}'!A:B`,
+  const row = await findRegistryRow(sheetName, tenantId);
+  if (!row) throw new Error("Tenant not found in registry");
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: getRegistrySheetId(),
+    range: `'${sheetName}'!B${row}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[sheetId]] },
   });
-  const rows = (res.data.values ?? []) as string[][];
-  const header = rows[0] ?? [];
-  if (header[0] === "TenantId") {
-    for (let i = 1; i < rows.length; i++) {
-      if (rows[i][0] === tenantId) {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: registryId,
-          range: `'${sheetName}'!B${i + 1}`,
-          valueInputOption: "USER_ENTERED",
-          requestBody: { values: [[sheetId]] },
-        });
-        return;
-      }
-    }
-  }
-  throw new Error("Tenant not found in registry");
 }
 
-/** tenant가 있으면 { sheetId }, 없으면 null */
-export async function registryGetTenant(tenantId: string): Promise<{ sheetId: string | null } | null> {
+/** 예전 일정 묶음(키 없음)에 관리자 키를 처음 한 번 기록한다. 이미 키가 있으면 false */
+export async function registrySetAdminKeyIfEmpty(tenantId: string, adminKey: string): Promise<boolean> {
+  const auth = getAuth();
+  const sheets = google.sheets({ version: "v4", auth });
+  const sheetName = await getRegistryFirstSheetName();
+  await ensureRegistryHeader(sheetName);
+  const row = await findRegistryRow(sheetName, tenantId);
+  if (!row) throw new Error("Tenant not found in registry");
+  const current = await sheets.spreadsheets.values.get({
+    spreadsheetId: getRegistrySheetId(),
+    range: `'${sheetName}'!C${row}`,
+  });
+  if (String(current.data.values?.[0]?.[0] ?? "").trim()) return false;
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: getRegistrySheetId(),
+    range: `'${sheetName}'!C${row}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[adminKey]] },
+  });
+  return true;
+}
+
+/** tenant가 있으면 { sheetId, adminKey }, 없으면 null. adminKey 는 서버 안에서만 쓰고 응답에 싣지 않는다 */
+export async function registryGetTenant(
+  tenantId: string
+): Promise<{ sheetId: string | null; adminKey: string | null } | null> {
   const auth = getAuth();
   const sheets = google.sheets({ version: "v4", auth });
   const registryId = getRegistrySheetId();
   const sheetName = await getRegistryFirstSheetName();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: registryId,
-    range: `'${sheetName}'!A:B`,
+    range: `'${sheetName}'!A:C`,
   });
   const rows = (res.data.values ?? []) as string[][];
   for (let i = 0; i < rows.length; i++) {
-    if (rows[i][0] === tenantId) return { sheetId: rows[i][1]?.trim() || null };
+    if (rows[i][0] === tenantId) {
+      return { sheetId: rows[i][1]?.trim() || null, adminKey: rows[i][2]?.trim() || null };
+    }
   }
   return null;
 }

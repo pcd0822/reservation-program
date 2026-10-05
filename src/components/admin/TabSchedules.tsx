@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { adminFetch } from "@/lib/adminClient";
 import { CalendarPlus, CalendarDays } from "lucide-react";
 import { CustomFieldsEditor } from "./CustomFieldsEditor";
 import type { CustomField } from "@/lib/utils";
@@ -243,7 +244,7 @@ export function TabSchedules({ tenantId, editGroup, onClearEdit }: Props) {
         for (let i = 0; i < editGroup.items.length; i++) {
           const item = editGroup.items[i];
           const t = toUpdate[i] ?? toUpdate[0] ?? item.title;
-          await fetch("/api/schedule", {
+          await adminFetch(tenantId, "/api/schedule", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -316,7 +317,7 @@ export function TabSchedules({ tenantId, editGroup, onClearEdit }: Props) {
       const groupTitleForCreate = (title || "").trim() || null;
       for (let idx = 0; idx < toCreate.length; idx++) {
         const t = toCreate[idx];
-        const res = await fetch("/api/schedule", {
+        const res = await adminFetch(tenantId, "/api/schedule", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

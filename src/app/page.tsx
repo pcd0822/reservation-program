@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { CalendarDays, PlusCircle, Link2, Sparkles } from "lucide-react";
+import { adminUrl, getAdminKey, saveAdminKey } from "@/lib/adminClient";
 
 const STORAGE_KEY_ADMIN_ID = "reservation_admin_id";
 
@@ -30,7 +31,7 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "create" }),
       });
-      let data: { adminUrl?: string; id?: string; error?: string } = {};
+      let data: { adminUrl?: string; id?: string; adminKey?: string; error?: string } = {};
       try {
         data = await res.json();
       } catch {
@@ -43,6 +44,7 @@ export default function HomePage() {
           } catch {
             /* ignore */
           }
+          if (data.adminKey) saveAdminKey(data.id, data.adminKey);
         }
         const url = data.adminUrl.startsWith("http") ? data.adminUrl : `${window.location.origin}${data.adminUrl}`;
         window.location.href = url;
@@ -60,14 +62,18 @@ export default function HomePage() {
     /docs\.google\.com\/spreadsheets\//i.test(text) || /spreadsheets\.google\.com/i.test(text);
 
   const goAdmin = (toId?: string) => {
+    // 붙여넣은 관리자 링크에 ?k=키 가 있으면 함께 기억한다
+    let pastedKey = "";
     const id = toId ?? (() => {
       const trimmed = linkId.trim();
       if (!trimmed) return null;
+      const keyMatch = trimmed.match(/[?&]k=([A-Za-z0-9_-]+)/);
+      if (keyMatch) pastedKey = keyMatch[1];
       if (isGoogleSheetUrl(trimmed)) {
         alert("구글 스프레드시트 링크는 여기가 아니에요.\n\n먼저 아래 '새 일정 만들기'를 누른 뒤, 관리자 페이지의 '시트 연결' 탭에 구글 시트 링크를 넣어 주세요.");
         return null;
       }
-      return trimmed.replace(/.*\/(a|s)\//, "").replace(/\/$/, "").trim() || trimmed;
+      return trimmed.replace(/[?#].*$/, "").replace(/.*\/(a|s)\//, "").replace(/\/$/, "").trim() || trimmed;
     })();
     if (!id) return;
     if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
@@ -79,7 +85,8 @@ export default function HomePage() {
     } catch {
       /* ignore */
     }
-    window.location.href = `/a/${id}`;
+    if (pastedKey) saveAdminKey(id, pastedKey);
+    window.location.href = adminUrl(id, pastedKey || getAdminKey(id));
   };
 
   return (

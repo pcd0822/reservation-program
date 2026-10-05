@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { adminFetch } from "@/lib/adminClient";
 
 type Props = { tenantId: string; sheetId: string | null; onConnected: () => void };
 
@@ -26,7 +27,7 @@ export function TabSheet({ tenantId, sheetId, onConnected }: Props) {
     }
     setLoading(true);
     try {
-      const res = await fetch("/api/tenant", {
+      const res = await adminFetch(tenantId, "/api/tenant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "connect", id: tenantId, sheetUrl: url.trim() }),

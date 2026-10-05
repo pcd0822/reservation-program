@@ -9,6 +9,9 @@ import {
   type ScheduleSlot,
 } from "@/lib/sheets";
 import { generateToken } from "@/lib/utils";
+import { requireAdmin } from "@/lib/adminAuth";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
@@ -131,8 +134,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const tenant = await registryGetTenant(tenantId);
-    if (!tenant?.sheetId) {
+    const auth = await requireAdmin(request, tenantId);
+    if (!auth.ok) return auth.response;
+    const tenant = auth.tenant;
+    if (!tenant.sheetId) {
       return NextResponse.json(
         { error: "먼저 시트 연결 탭에서 구글 시트를 연결해 주세요." },
         { status: 400 }
@@ -223,8 +228,10 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const tenant = await registryGetTenant(tenantId);
-    if (!tenant?.sheetId) {
+    const auth = await requireAdmin(request, tenantId);
+    if (!auth.ok) return auth.response;
+    const tenant = auth.tenant;
+    if (!tenant.sheetId) {
       return NextResponse.json(
         { error: "시트가 연결되지 않았습니다." },
         { status: 400 }
@@ -267,8 +274,10 @@ export async function DELETE(request: NextRequest) {
     if (!id || !tenantId) {
       return NextResponse.json({ error: "id and tenantId required" }, { status: 400 });
     }
-    const tenant = await registryGetTenant(tenantId);
-    if (!tenant?.sheetId) {
+    const auth = await requireAdmin(request, tenantId);
+    if (!auth.ok) return auth.response;
+    const tenant = auth.tenant;
+    if (!tenant.sheetId) {
       return NextResponse.json({ error: "시트가 연결되지 않았습니다." }, { status: 400 });
     }
     await sheetDeleteSchedule(tenant.sheetId, id);
